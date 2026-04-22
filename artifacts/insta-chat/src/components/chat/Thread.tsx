@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useChatStore } from "@/lib/store";
 import { CURRENT_USER } from "@/lib/types";
 import { motion } from "framer-motion";
+import { EmojiText } from "./EmojiText";
 
 export function Thread({ activeId }: { activeId: string }) {
   const { messages, conversations } = useChatStore();
@@ -58,7 +59,7 @@ export function Thread({ activeId }: { activeId: string }) {
                 style={{ borderRadius }}
                 dir="auto"
               >
-                {msg.content}
+                <EmojiText text={msg.content} />
               </div>
               
               {/* Status */}

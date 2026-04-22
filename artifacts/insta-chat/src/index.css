@@ -102,7 +102,23 @@
 
 .ig-pop {
   animation: igPop 0.18s ease-out;
+  will-change: transform, opacity;
 }
+
+html, body, #root {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+/* Smooth scroll on chat thread */
+.flex-1.overflow-y-auto {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hide scrollbars but keep functionality */
+.flex-1.overflow-y-auto::-webkit-scrollbar { width: 0; }
+.flex-1.overflow-y-auto { scrollbar-width: none; }
 @keyframes igPop {
   from { transform: scale(0.96); opacity: 0; }
   to   { transform: scale(1);    opacity: 1; }

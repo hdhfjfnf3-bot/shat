@@ -4,6 +4,7 @@ import { Copy, CornerUpLeft, Forward, Trash2, Smile } from "lucide-react";
 import { Message, CURRENT_USER, User } from "@/lib/types";
 import { useChatStore } from "@/lib/store";
 import { EmojiText } from "./EmojiText";
+import { VoiceMessage } from "./VoiceMessage";
 
 const QUICK_REACTIONS = ["❤️", "😂", "😮", "😢", "😡", "👍"];
 
@@ -204,13 +205,22 @@ export function MessageBubble({
               setShowActions(true);
               setShowMenu(true);
             }}
-            className={`relative px-[16px] py-[10px] text-[15px] leading-[19px] break-words cursor-pointer select-none ig-pop ${
+            className={`relative ${msg.type === "voice" ? "px-3 py-2" : "px-[16px] py-[10px]"} text-[15px] leading-[19px] break-words cursor-pointer select-none ig-pop ${
               isOwn ? "ig-gradient text-white" : "bg-[#262626] text-[#fafafa]"
             }`}
             style={{ borderRadius }}
             dir="auto"
           >
-            <EmojiText text={msg.content} />
+            {msg.type === "voice" && msg.voice ? (
+              <VoiceMessage
+                src={msg.content}
+                peaks={msg.voice.peaks}
+                duration={msg.voice.duration}
+                isOwn={isOwn}
+              />
+            ) : (
+              <EmojiText text={msg.content} />
+            )}
           </div>
 
           {!isOwn && showActions && (

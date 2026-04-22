@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { Conversation, Message, User, CURRENT_USER, MessageStatus } from "./types";
+import { Conversation, Message, User, CURRENT_USER, MessageStatus, VoiceMeta } from "./types";
 import { seedConversations, seedMessages } from "./seed";
 import { simulateBotReply } from "./bot";
 
@@ -10,7 +10,7 @@ interface ChatState {
   activeConversationId: string | null;
   replyingTo: Record<string, string | null>;
   setActiveConversation: (id: string | null) => void;
-  sendMessage: (conversationId: string, content: string, type?: "text" | "image" | "like", replyToId?: string) => void;
+  sendMessage: (conversationId: string, content: string, type?: "text" | "image" | "like" | "voice", replyToId?: string, voice?: VoiceMeta) => void;
   updateMessageStatus: (conversationId: string, messageId: string, status: MessageStatus) => void;
   addReaction: (conversationId: string, messageId: string, emoji: string) => void;
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => void;
@@ -19,6 +19,8 @@ interface ChatState {
   receiveMessage: (conversationId: string, message: Message) => void;
   setReplyingTo: (conversationId: string, messageId: string | null) => void;
   resetDemo: () => void;
+  createConversation: (username: string) => string;
+  clearAll: () => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -63,7 +65,7 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      sendMessage: (conversationId, content, type = "text", replyToId) => {
+      sendMessage: (conversationId, content, type = "text", replyToId, voice) => {
         // clear reply state on send
         if (get().replyingTo[conversationId]) {
           set((state) => ({ replyingTo: { ...state.replyingTo, [conversationId]: null } }));
@@ -79,6 +81,7 @@ export const useChatStore = create<ChatState>()(
           createdAt: new Date().toISOString(),
           reactions: [],
           replyToId,
+          voice,
         };
 
         set((state) => {
@@ -204,9 +207,60 @@ export const useChatStore = create<ChatState>()(
       resetDemo: () => {
         set({ conversations: seedConversations, messages: seedMessages, activeConversationId: null });
       },
+
+      clearAll: () => {
+        set({ conversations: {}, messages: {}, activeConversationId: null, replyingTo: {} });
+      },
+
+      createConversation: (username) => {
+        const clean = username.trim().replace(/^@/, "");
+        if (!clean) return "";
+        const existing = Object.values(get().conversations).find(
+          (c) => c.participants.length === 1 && c.participants[0].username.toLowerCase() === clean.toLowerCase(),
+        );
+        if (existing) {
+          set({ activeConversationId: existing.id });
+          return existing.id;
+        }
+        const userId = "u_" + Math.random().toString(36).slice(2, 8);
+        const display = clean.charAt(0).toUpperCase() + clean.slice(1);
+        const newUser: User = {
+          id: userId,
+          username: clean,
+          displayName: display,
+          avatarUrl: `https://i.pravatar.cc/150?u=${userId}`,
+          isVerified: false,
+          isOnline: true,
+          lastSeenAt: new Date().toISOString(),
+        };
+        const cId = "c_" + Math.random().toString(36).slice(2, 8);
+        const conv: Conversation = {
+          id: cId,
+          type: "primary",
+          participants: [newUser],
+          unreadCount: 0,
+          isMuted: false,
+          isPinned: false,
+          isOnline: true,
+          lastActiveAt: new Date().toISOString(),
+        };
+        set((state) => ({
+          conversations: { ...state.conversations, [cId]: conv },
+          messages: { ...state.messages, [cId]: [] },
+          activeConversationId: cId,
+        }));
+        return cId;
+      },
     }),
     {
       name: "ig-direct-storage",
+      version: 2,
+      migrate: () => ({
+        conversations: {},
+        messages: {},
+        activeConversationId: null,
+        replyingTo: {},
+      }) as any,
     }
   )
 );

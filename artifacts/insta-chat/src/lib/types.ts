@@ -9,6 +9,11 @@ export type User = {
 };
 
 export type MessageType = "text" | "image" | "voice" | "gif" | "sticker" | "reply" | "like";
+
+export type VoiceMeta = {
+  duration: number;
+  peaks: number[];
+};
 export type MessageStatus = "sending" | "sent" | "delivered" | "seen";
 
 export type Reaction = {
@@ -28,6 +33,7 @@ export type Message = {
   createdAt: string;
   isUnsent?: boolean;
   isEdited?: boolean;
+  voice?: VoiceMeta;
 };
 
 export type ConversationType = "primary" | "general" | "requests";

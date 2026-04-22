@@ -43,8 +43,9 @@ export const useChatStore = create<ChatState>()(
               ...state.messages,
               [conversationId]: list.map((m) => {
                 if (m.id !== messageId) return m;
-                const mine = m.reactions.find((r) => r.userId === CURRENT_USER.id);
-                let next = m.reactions.filter((r) => r.userId !== CURRENT_USER.id);
+                const cur = m.reactions ?? [];
+                const mine = cur.find((r) => r.userId === CURRENT_USER.id);
+                let next = cur.filter((r) => r.userId !== CURRENT_USER.id);
                 if (!mine || mine.emoji !== emoji) {
                   next = [...next, { userId: CURRENT_USER.id, emoji }];
                 }

@@ -103,12 +103,13 @@ export function MessageBubble({
   };
 
   // Aggregate reactions
-  const reactionCounts = msg.reactions.reduce<Record<string, number>>((acc, r) => {
+  const reactions = msg.reactions ?? [];
+  const reactionCounts = reactions.reduce<Record<string, number>>((acc, r) => {
     acc[r.emoji] = (acc[r.emoji] || 0) + 1;
     return acc;
   }, {});
   const reactionEntries = Object.entries(reactionCounts);
-  const myReaction = msg.reactions.find((r) => r.userId === CURRENT_USER.id)?.emoji;
+  const myReaction = reactions.find((r) => r.userId === CURRENT_USER.id)?.emoji;
 
   if (msg.isUnsent) {
     return (

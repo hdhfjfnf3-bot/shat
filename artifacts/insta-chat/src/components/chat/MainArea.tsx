@@ -3,6 +3,7 @@ import { Camera, ChevronLeft, Phone, Video, Info } from "lucide-react";
 import { useLocation } from "wouter";
 import { Thread } from "./Thread";
 import { Composer } from "./Composer";
+import { EmojiStylePicker } from "./EmojiStylePicker";
 
 export function MainArea({ activeId }: { activeId: string | null }) {
   const [, setLocation] = useLocation();
@@ -44,6 +45,7 @@ export function MainArea({ activeId }: { activeId: string | null }) {
         <div className="flex items-center gap-5 text-white">
           <button><Phone className="w-6 h-6 stroke-[1.5]" /></button>
           <button><Video className="w-6 h-6 stroke-[1.5]" /></button>
+          <EmojiStylePicker align="right" />
           <button><Info className="w-6 h-6 stroke-[1.5]" /></button>
         </div>
       </div>

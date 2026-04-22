@@ -1,6 +1,6 @@
 import { ReactNode, useMemo } from "react";
 import emojiRegex from "emoji-regex";
-import { useEmojiStyle, EmojiStyleKey } from "@/lib/emojiStyle";
+import { useEmojiStyle, EmojiStyleKey, EMOJI_STYLE_TO_CDN } from "@/lib/emojiStyle";
 
 function toUnified(seg: string): string {
   const cps: string[] = [];
@@ -14,7 +14,8 @@ function toUnified(seg: string): string {
 }
 
 function emojiUrl(unified: string, style: Exclude<EmojiStyleKey, "native">): string {
-  return `https://cdn.jsdelivr.net/npm/emoji-datasource-${style}@15.1.2/img/${style}/64/${unified}.png`;
+  const folder = EMOJI_STYLE_TO_CDN[style];
+  return `https://cdn.jsdelivr.net/npm/emoji-datasource-${folder}@15.1.2/img/${folder}/64/${unified}.png`;
 }
 
 const onErr = (e: React.SyntheticEvent<HTMLImageElement>) => {

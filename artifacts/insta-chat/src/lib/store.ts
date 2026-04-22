@@ -1,35 +1,72 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { Conversation, Message, User, CURRENT_USER, MessageStatus, VoiceMeta } from "./types";
-import { seedConversations, seedMessages } from "./seed";
-import { simulateBotReply } from "./bot";
+
+type SendMeta = {
+  id: string;
+  content: string;
+  type: "text" | "image" | "voice" | "like";
+  replyToId?: string;
+  voice?: VoiceMeta;
+};
+
+type RealtimeAdapter = {
+  sendMessage?: (toUsername: string, msg: SendMeta) => boolean;
+  reactMessage?: (peer: string, messageId: string, emoji: string) => boolean;
+  unsendMessage?: (peer: string, messageId: string) => boolean;
+};
+
+const realtime: RealtimeAdapter = {};
+
+export function setRealtimeAdapter(a: RealtimeAdapter) {
+  realtime.sendMessage = a.sendMessage;
+  realtime.reactMessage = a.reactMessage;
+  realtime.unsendMessage = a.unsendMessage;
+}
 
 interface ChatState {
   conversations: Record<string, Conversation>;
   messages: Record<string, Message[]>;
   activeConversationId: string | null;
   replyingTo: Record<string, string | null>;
+  typingPeers: Record<string, boolean>;
   setActiveConversation: (id: string | null) => void;
   sendMessage: (conversationId: string, content: string, type?: "text" | "image" | "like" | "voice", replyToId?: string, voice?: VoiceMeta) => void;
   updateMessageStatus: (conversationId: string, messageId: string, status: MessageStatus) => void;
-  addReaction: (conversationId: string, messageId: string, emoji: string) => void;
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => void;
+  setReactions: (conversationId: string, messageId: string, reactions: { userId: string; emoji: string }[]) => void;
   unsendMessage: (conversationId: string, messageId: string) => void;
+  markUnsent: (conversationId: string, messageId: string) => void;
   markAsRead: (conversationId: string) => void;
-  receiveMessage: (conversationId: string, message: Message) => void;
+  ingestRemoteMessage: (peerUsername: string, message: Omit<Message, "conversationId" | "status"> & { senderId: string }) => void;
   setReplyingTo: (conversationId: string, messageId: string | null) => void;
-  resetDemo: () => void;
+  ensureConversation: (peerUsername: string) => string;
   createConversation: (username: string) => string;
+  setTyping: (peerUsername: string, isTyping: boolean) => void;
   clearAll: () => void;
+}
+
+function makeUser(username: string): User {
+  const u = username.toLowerCase();
+  return {
+    id: u,
+    username: u,
+    displayName: u.charAt(0).toUpperCase() + u.slice(1),
+    avatarUrl: `https://i.pravatar.cc/150?u=${u}`,
+    isVerified: false,
+    isOnline: true,
+    lastSeenAt: new Date().toISOString(),
+  };
 }
 
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
-      conversations: seedConversations,
-      messages: seedMessages,
+      conversations: {},
+      messages: {},
       activeConversationId: null,
       replyingTo: {},
+      typingPeers: {},
 
       setReplyingTo: (conversationId, messageId) => {
         set((state) => ({
@@ -37,44 +74,53 @@ export const useChatStore = create<ChatState>()(
         }));
       },
 
-      toggleReaction: (conversationId, messageId, emoji) => {
-        set((state) => {
-          const list = state.messages[conversationId] || [];
-          return {
-            messages: {
-              ...state.messages,
-              [conversationId]: list.map((m) => {
-                if (m.id !== messageId) return m;
-                const cur = m.reactions ?? [];
-                const mine = cur.find((r) => r.userId === CURRENT_USER.id);
-                let next = cur.filter((r) => r.userId !== CURRENT_USER.id);
-                if (!mine || mine.emoji !== emoji) {
-                  next = [...next, { userId: CURRENT_USER.id, emoji }];
-                }
-                return { ...m, reactions: next };
-              }),
-            },
-          };
-        });
+      setTyping: (peer, isTyping) => {
+        set((state) => ({ typingPeers: { ...state.typingPeers, [peer.toLowerCase()]: isTyping } }));
       },
 
       setActiveConversation: (id) => {
         set({ activeConversationId: id });
-        if (id) {
-          get().markAsRead(id);
-        }
+        if (id) get().markAsRead(id);
+      },
+
+      ensureConversation: (peerUsername) => {
+        const id = peerUsername.toLowerCase().replace(/^@/, "");
+        if (!id) return "";
+        const cur = get().conversations[id];
+        if (cur) return id;
+        const conv: Conversation = {
+          id,
+          type: "primary",
+          participants: [makeUser(id)],
+          unreadCount: 0,
+          isMuted: false,
+          isPinned: false,
+          isOnline: true,
+          lastActiveAt: new Date().toISOString(),
+        };
+        set((state) => ({
+          conversations: { ...state.conversations, [id]: conv },
+          messages: { ...state.messages, [id]: state.messages[id] ?? [] },
+        }));
+        return id;
+      },
+
+      createConversation: (username) => {
+        const id = get().ensureConversation(username);
+        if (id) set({ activeConversationId: id });
+        return id;
       },
 
       sendMessage: (conversationId, content, type = "text", replyToId, voice) => {
-        // clear reply state on send
         if (get().replyingTo[conversationId]) {
           set((state) => ({ replyingTo: { ...state.replyingTo, [conversationId]: null } }));
         }
-        const id = Math.random().toString(36).substring(7);
+        const me = CURRENT_USER.username;
+        const id = Math.random().toString(36).slice(2, 10);
         const newMessage: Message = {
           id,
           conversationId,
-          senderId: CURRENT_USER.id,
+          senderId: me,
           type,
           content,
           status: "sending",
@@ -85,83 +131,90 @@ export const useChatStore = create<ChatState>()(
         };
 
         set((state) => {
-          const conversationMessages = state.messages[conversationId] || [];
+          const list = state.messages[conversationId] || [];
+          const conv = state.conversations[conversationId];
           return {
-            messages: {
-              ...state.messages,
-              [conversationId]: [...conversationMessages, newMessage],
-            },
-            conversations: {
-              ...state.conversations,
-              [conversationId]: {
-                ...state.conversations[conversationId],
-                lastMessage: newMessage,
-              },
-            },
+            messages: { ...state.messages, [conversationId]: [...list, newMessage] },
+            conversations: conv
+              ? { ...state.conversations, [conversationId]: { ...conv, lastMessage: newMessage, lastActiveAt: newMessage.createdAt } }
+              : state.conversations,
           };
         });
 
-        // Simulate network
-        setTimeout(() => get().updateMessageStatus(conversationId, id, "sent"), 300);
-        setTimeout(() => get().updateMessageStatus(conversationId, id, "delivered"), 600);
-
-        // Trigger bot reply
-        const conv = get().conversations[conversationId];
-        const otherId = conv?.participants.find((p) => p !== CURRENT_USER.id) ?? "1";
-        simulateBotReply(
-          conversationId,
-          content,
-          get().receiveMessage,
-          (cId, mId) => get().updateMessageStatus(cId, mId, "seen"),
-          undefined,
+        const sent = realtime.sendMessage?.(conversationId, {
           id,
-          otherId,
-        );
+          content,
+          type,
+          replyToId,
+          voice,
+        });
+
+        if (sent) {
+          setTimeout(() => get().updateMessageStatus(conversationId, id, "sent"), 200);
+        } else {
+          setTimeout(() => get().updateMessageStatus(conversationId, id, "sent"), 300);
+          setTimeout(() => get().updateMessageStatus(conversationId, id, "delivered"), 600);
+        }
       },
 
       updateMessageStatus: (conversationId, messageId, status) => {
         set((state) => {
-          const conversationMessages = state.messages[conversationId] || [];
+          const list = state.messages[conversationId] || [];
           return {
             messages: {
               ...state.messages,
-              [conversationId]: conversationMessages.map((m) =>
-                m.id === messageId ? { ...m, status } : m
-              ),
+              [conversationId]: list.map((m) => (m.id === messageId ? { ...m, status } : m)),
             },
           };
         });
       },
 
-      addReaction: (conversationId, messageId, emoji) => {
+      toggleReaction: (conversationId, messageId, emoji) => {
+        const me = CURRENT_USER.username;
         set((state) => {
-          const conversationMessages = state.messages[conversationId] || [];
+          const list = state.messages[conversationId] || [];
           return {
             messages: {
               ...state.messages,
-              [conversationId]: conversationMessages.map((m) => {
-                if (m.id === messageId) {
-                  const existing = m.reactions.find(r => r.userId === CURRENT_USER.id && r.emoji === emoji);
-                  if (existing) {
-                    return { ...m, reactions: m.reactions.filter(r => r !== existing) };
-                  }
-                  return { ...m, reactions: [...m.reactions, { userId: CURRENT_USER.id, emoji }] };
-                }
-                return m;
+              [conversationId]: list.map((m) => {
+                if (m.id !== messageId) return m;
+                const cur = m.reactions ?? [];
+                const mine = cur.find((r) => r.userId === me);
+                let next = cur.filter((r) => r.userId !== me);
+                if (!mine || mine.emoji !== emoji) next = [...next, { userId: me, emoji }];
+                return { ...m, reactions: next };
               }),
+            },
+          };
+        });
+        realtime.reactMessage?.(conversationId, messageId, emoji);
+      },
+
+      setReactions: (conversationId, messageId, reactions) => {
+        set((state) => {
+          const list = state.messages[conversationId] || [];
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: list.map((m) => (m.id === messageId ? { ...m, reactions } : m)),
             },
           };
         });
       },
 
       unsendMessage: (conversationId, messageId) => {
+        get().markUnsent(conversationId, messageId);
+        realtime.unsendMessage?.(conversationId, messageId);
+      },
+
+      markUnsent: (conversationId, messageId) => {
         set((state) => {
-          const conversationMessages = state.messages[conversationId] || [];
+          const list = state.messages[conversationId] || [];
           return {
             messages: {
               ...state.messages,
-              [conversationId]: conversationMessages.map((m) =>
-                m.id === messageId ? { ...m, isUnsent: true } : m
+              [conversationId]: list.map((m) =>
+                m.id === messageId ? { ...m, isUnsent: true, content: "", voice: undefined } : m,
               ),
             },
           };
@@ -173,94 +226,71 @@ export const useChatStore = create<ChatState>()(
           const conv = state.conversations[conversationId];
           if (!conv || conv.unreadCount === 0) return state;
           return {
-            conversations: {
-              ...state.conversations,
-              [conversationId]: { ...conv, unreadCount: 0 },
-            },
+            conversations: { ...state.conversations, [conversationId]: { ...conv, unreadCount: 0 } },
           };
         });
       },
 
-      receiveMessage: (conversationId, message) => {
+      ingestRemoteMessage: (peerUsername, msg) => {
+        const me = CURRENT_USER.username;
+        const convId = get().ensureConversation(peerUsername);
+        const isOwn = msg.senderId.toLowerCase() === me.toLowerCase();
         set((state) => {
-          const conversationMessages = state.messages[conversationId] || [];
-          const conv = state.conversations[conversationId];
-          const isUnread = state.activeConversationId !== conversationId;
-          
-          return {
-            messages: {
-              ...state.messages,
-              [conversationId]: [...conversationMessages, message],
-            },
-            conversations: {
-              ...state.conversations,
-              [conversationId]: {
-                ...conv,
-                lastMessage: message,
-                unreadCount: isUnread ? conv.unreadCount + 1 : 0,
+          const list = state.messages[convId] || [];
+          if (list.some((m) => m.id === msg.id)) {
+            // already have it (echo of our own send) — just mark delivered
+            return {
+              messages: {
+                ...state.messages,
+                [convId]: list.map((m) => (m.id === msg.id ? { ...m, status: "delivered" as MessageStatus } : m)),
               },
-            },
+            };
+          }
+          const stored: Message = {
+            id: msg.id,
+            conversationId: convId,
+            senderId: msg.senderId.toLowerCase(),
+            type: msg.type,
+            content: msg.content,
+            createdAt: msg.createdAt,
+            replyToId: msg.replyToId,
+            reactions: msg.reactions ?? [],
+            voice: msg.voice,
+            status: isOwn ? "delivered" : "delivered",
+          };
+          const conv = state.conversations[convId];
+          const isUnread = !isOwn && state.activeConversationId !== convId;
+          return {
+            messages: { ...state.messages, [convId]: [...list, stored] },
+            conversations: conv
+              ? {
+                  ...state.conversations,
+                  [convId]: {
+                    ...conv,
+                    lastMessage: stored,
+                    lastActiveAt: stored.createdAt,
+                    unreadCount: isUnread ? (conv.unreadCount || 0) + 1 : conv.unreadCount,
+                  },
+                }
+              : state.conversations,
           };
         });
-      },
-
-      resetDemo: () => {
-        set({ conversations: seedConversations, messages: seedMessages, activeConversationId: null });
       },
 
       clearAll: () => {
-        set({ conversations: {}, messages: {}, activeConversationId: null, replyingTo: {} });
-      },
-
-      createConversation: (username) => {
-        const clean = username.trim().replace(/^@/, "");
-        if (!clean) return "";
-        const existing = Object.values(get().conversations).find(
-          (c) => c.participants.length === 1 && c.participants[0].username.toLowerCase() === clean.toLowerCase(),
-        );
-        if (existing) {
-          set({ activeConversationId: existing.id });
-          return existing.id;
-        }
-        const userId = "u_" + Math.random().toString(36).slice(2, 8);
-        const display = clean.charAt(0).toUpperCase() + clean.slice(1);
-        const newUser: User = {
-          id: userId,
-          username: clean,
-          displayName: display,
-          avatarUrl: `https://i.pravatar.cc/150?u=${userId}`,
-          isVerified: false,
-          isOnline: true,
-          lastSeenAt: new Date().toISOString(),
-        };
-        const cId = "c_" + Math.random().toString(36).slice(2, 8);
-        const conv: Conversation = {
-          id: cId,
-          type: "primary",
-          participants: [newUser],
-          unreadCount: 0,
-          isMuted: false,
-          isPinned: false,
-          isOnline: true,
-          lastActiveAt: new Date().toISOString(),
-        };
-        set((state) => ({
-          conversations: { ...state.conversations, [cId]: conv },
-          messages: { ...state.messages, [cId]: [] },
-          activeConversationId: cId,
-        }));
-        return cId;
+        set({ conversations: {}, messages: {}, activeConversationId: null, replyingTo: {}, typingPeers: {} });
       },
     }),
     {
       name: "ig-direct-storage",
-      version: 2,
+      version: 3,
       migrate: () => ({
         conversations: {},
         messages: {},
         activeConversationId: null,
         replyingTo: {},
+        typingPeers: {},
       }) as any,
-    }
-  )
+    },
+  ),
 );

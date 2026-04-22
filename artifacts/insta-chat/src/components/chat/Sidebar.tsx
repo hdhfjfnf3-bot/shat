@@ -105,7 +105,7 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
                 className={`flex items-center px-6 py-[8px] gap-3 hover:bg-[#121212] transition-colors w-full text-left ${isActive ? 'bg-[#121212]' : ''}`}
                 onClick={() => {
                   setActiveConversation(conv.id);
-                  setLocation(`/t/${conv.id}`);
+                  setLocation(`/${conv.id}`);
                 }}
               >
                 <div className="relative shrink-0">

@@ -50,12 +50,23 @@ export type Conversation = {
   lastActiveAt: string;
 };
 
-export const CURRENT_USER: User = {
-  id: "you",
-  username: "you",
-  displayName: "You",
-  avatarUrl: "https://i.pravatar.cc/150?u=you",
-  isVerified: false,
-  isOnline: true,
-  lastSeenAt: new Date().toISOString(),
-};
+import { useMe } from "./me";
+
+function liveMe(): User {
+  const u = useMe.getState().username || "you";
+  return {
+    id: u,
+    username: u,
+    displayName: u.charAt(0).toUpperCase() + u.slice(1),
+    avatarUrl: `https://i.pravatar.cc/150?u=${u}`,
+    isVerified: false,
+    isOnline: true,
+    lastSeenAt: new Date().toISOString(),
+  };
+}
+
+export const CURRENT_USER = new Proxy({} as User, {
+  get(_t, key) {
+    return (liveMe() as any)[key as string];
+  },
+}) as User;

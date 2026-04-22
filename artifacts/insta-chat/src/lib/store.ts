@@ -8,13 +8,16 @@ interface ChatState {
   conversations: Record<string, Conversation>;
   messages: Record<string, Message[]>;
   activeConversationId: string | null;
+  replyingTo: Record<string, string | null>;
   setActiveConversation: (id: string | null) => void;
   sendMessage: (conversationId: string, content: string, type?: "text" | "image" | "like", replyToId?: string) => void;
   updateMessageStatus: (conversationId: string, messageId: string, status: MessageStatus) => void;
   addReaction: (conversationId: string, messageId: string, emoji: string) => void;
+  toggleReaction: (conversationId: string, messageId: string, emoji: string) => void;
   unsendMessage: (conversationId: string, messageId: string) => void;
   markAsRead: (conversationId: string) => void;
   receiveMessage: (conversationId: string, message: Message) => void;
+  setReplyingTo: (conversationId: string, messageId: string | null) => void;
   resetDemo: () => void;
 }
 
@@ -24,6 +27,33 @@ export const useChatStore = create<ChatState>()(
       conversations: seedConversations,
       messages: seedMessages,
       activeConversationId: null,
+      replyingTo: {},
+
+      setReplyingTo: (conversationId, messageId) => {
+        set((state) => ({
+          replyingTo: { ...state.replyingTo, [conversationId]: messageId },
+        }));
+      },
+
+      toggleReaction: (conversationId, messageId, emoji) => {
+        set((state) => {
+          const list = state.messages[conversationId] || [];
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: list.map((m) => {
+                if (m.id !== messageId) return m;
+                const mine = m.reactions.find((r) => r.userId === CURRENT_USER.id);
+                let next = m.reactions.filter((r) => r.userId !== CURRENT_USER.id);
+                if (!mine || mine.emoji !== emoji) {
+                  next = [...next, { userId: CURRENT_USER.id, emoji }];
+                }
+                return { ...m, reactions: next };
+              }),
+            },
+          };
+        });
+      },
 
       setActiveConversation: (id) => {
         set({ activeConversationId: id });
@@ -33,6 +63,10 @@ export const useChatStore = create<ChatState>()(
       },
 
       sendMessage: (conversationId, content, type = "text", replyToId) => {
+        // clear reply state on send
+        if (get().replyingTo[conversationId]) {
+          set((state) => ({ replyingTo: { ...state.replyingTo, [conversationId]: null } }));
+        }
         const id = Math.random().toString(36).substring(7);
         const newMessage: Message = {
           id,

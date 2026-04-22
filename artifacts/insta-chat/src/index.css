@@ -100,6 +100,14 @@
   background: linear-gradient(135deg, #4f5bd5, #962fbf, #d62976, #fa7e1e, #feda75);
 }
 
+.ig-pop {
+  animation: igPop 0.18s ease-out;
+}
+@keyframes igPop {
+  from { transform: scale(0.96); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
 .ig-gradient-text {
   background: linear-gradient(135deg, #4f5bd5, #962fbf, #d62976, #fa7e1e, #feda75);
   -webkit-background-clip: text;

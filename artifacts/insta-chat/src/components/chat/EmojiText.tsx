@@ -21,10 +21,13 @@ const onErr = (e: React.SyntheticEvent<HTMLImageElement>) => {
   e.currentTarget.style.display = "none";
 };
 
-export function EmojiText({ text, size = 20 }: { text: string; size?: number }) {
+export function EmojiText({ text, size = 20 }: { text?: string | null; size?: number }) {
   const style = useEmojiStyle((s) => s.style);
+  const safe = typeof text === "string" ? text : "";
 
   const parts = useMemo<ReactNode[]>(() => {
+    const text = safe;
+    if (!text) return [];
     if (style === "native") return [text];
     const regex = emojiRegex();
     const out: ReactNode[] = [];
@@ -62,18 +65,19 @@ export function EmojiText({ text, size = 20 }: { text: string; size?: number }) 
 
   // Detect "jumbo" emoji-only short messages (like Instagram)
   const isJumbo = useMemo(() => {
-    const stripped = text.replace(emojiRegex(), "").trim();
+    if (!safe) return false;
+    const stripped = safe.replace(emojiRegex(), "").trim();
     if (stripped.length > 0) return false;
-    const count = (text.match(emojiRegex()) || []).length;
+    const count = (safe.match(emojiRegex()) || []).length;
     return count > 0 && count <= 3;
-  }, [text]);
+  }, [safe]);
 
   if (isJumbo && style !== "native") {
     const regex = emojiRegex();
     const jumbo: ReactNode[] = [];
     let m: RegExpExecArray | null;
     let key = 0;
-    while ((m = regex.exec(text)) !== null) {
+    while ((m = regex.exec(safe)) !== null) {
       const unified = toUnified(m[0]);
       if (unified) {
         jumbo.push(
@@ -91,7 +95,7 @@ export function EmojiText({ text, size = 20 }: { text: string; size?: number }) 
     return <span style={{ lineHeight: 1 }}>{jumbo}</span>;
   }
   if (isJumbo && style === "native") {
-    return <span style={{ fontSize: 56, lineHeight: 1 }}>{text}</span>;
+    return <span style={{ fontSize: 56, lineHeight: 1 }}>{safe}</span>;
   }
 
   return <>{parts}</>;

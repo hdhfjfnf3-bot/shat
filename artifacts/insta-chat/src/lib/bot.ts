@@ -8,40 +8,50 @@ const botResponses = [
   "Lol",
   "طب وبعدين؟",
   "I don't know tbh",
-  "Nice ✨"
+  "Nice ✨",
+  "هه تمام",
+  "omg 😍",
+  "k",
+  "tell me more",
 ];
 
 export function simulateBotReply(
-  conversationId: string, 
-  userMessage: string, 
-  setTyping: (cId: string, isTyping: boolean) => void,
+  conversationId: string,
+  userMessage: string,
   receiveMessage: (cId: string, m: Message) => void,
-  updateStatus: (cId: string, mId: string, status: "seen") => void,
-  lastMessageId: string
+  updateMessageStatus: (cId: string, mId: string, status: "seen") => void,
+  setTyping?: (cId: string, isTyping: boolean) => void,
+  lastOwnMessageId?: string,
+  otherSenderId: string = "1",
 ) {
+  const typingDelay = 600 + Math.random() * 800;
+  const replyDelay = typingDelay + 1200 + Math.random() * 1800;
+
   setTimeout(() => {
-    setTyping(conversationId, true);
-    
-    setTimeout(() => {
-      setTyping(conversationId, false);
-      updateStatus(conversationId, lastMessageId, "seen");
+    setTyping?.(conversationId, true);
+  }, typingDelay);
 
-      const mId = Math.random().toString(36).substring(7);
-      const responseText = userMessage.includes("?") 
-        ? "I'm not sure, maybe?" 
-        : botResponses[Math.floor(Math.random() * botResponses.length)];
+  setTimeout(() => {
+    setTyping?.(conversationId, false);
 
-      const botReply: Message = {
-        id: mId,
-        conversationId,
-        senderId: "1", // Simplified, assumes 1 is the other person in most seeds
-        type: "text",
-        content: responseText,
-        reactions: [],
-        status: "delivered",
-        createdAt: new Date().toISOString(),
-      };
-      receiveMessage(conversationId, botReply);
-    }, 1500 + Math.random() * 2000);
-  }, 1000);
+    if (lastOwnMessageId) {
+      updateMessageStatus(conversationId, lastOwnMessageId, "seen");
+    }
+
+    const responseText = userMessage.trim().endsWith("?")
+      ? "hmm let me think 🤔"
+      : botResponses[Math.floor(Math.random() * botResponses.length)];
+
+    const botReply: Message = {
+      id: Math.random().toString(36).substring(2, 10),
+      conversationId,
+      senderId: otherSenderId,
+      type: "text",
+      content: responseText,
+      reactions: [],
+      status: "delivered",
+      createdAt: new Date().toISOString(),
+    };
+    receiveMessage(conversationId, botReply);
+  }, replyDelay);
 }

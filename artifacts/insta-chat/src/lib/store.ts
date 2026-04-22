@@ -68,7 +68,17 @@ export const useChatStore = create<ChatState>()(
         setTimeout(() => get().updateMessageStatus(conversationId, id, "delivered"), 600);
 
         // Trigger bot reply
-        simulateBotReply(conversationId, content, get().receiveMessage, get().updateMessageStatus);
+        const conv = get().conversations[conversationId];
+        const otherId = conv?.participants.find((p) => p !== CURRENT_USER.id) ?? "1";
+        simulateBotReply(
+          conversationId,
+          content,
+          get().receiveMessage,
+          (cId, mId) => get().updateMessageStatus(cId, mId, "seen"),
+          undefined,
+          id,
+          otherId,
+        );
       },
 
       updateMessageStatus: (conversationId, messageId, status) => {

@@ -21,7 +21,14 @@ export function useRealtime() {
     async function init() {
       const store = useChatStore.getState();
 
-      // Load all rooms for this user
+      // Listen for new rooms being created where I am a participant
+      const globalCh = supabase.channel(`global:${me}`)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "rooms", filter: `user_a=eq.${me}` }, handleNewRoom)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "rooms", filter: `user_b=eq.${me}` }, handleNewRoom)
+        .subscribe();
+      channelsRef.current.push(globalCh);
+
+      // Load all existing rooms for this user
       const { data: rooms } = await supabase
         .from("rooms")
         .select("*")
@@ -29,37 +36,47 @@ export function useRealtime() {
 
       if (closed) return;
 
-      // Load history + subscribe for each room
       for (const room of rooms ?? []) {
-        const peer = room.user_a === me ? room.user_b : room.user_a;
-        store.ensureConversation(peer);
-
-        // Load message history
-        const { data: msgs } = await supabase
-          .from("messages")
-          .select("*, reactions(*)")
-          .eq("room_key", room.key)
-          .order("created_at");
-
-        if (closed) return;
-
-        for (const m of msgs ?? []) {
-          store.ingestRemoteMessage(peer, {
-            id: m.id,
-            senderId: m.sender_username,
-            type: m.type,
-            content: m.is_unsent ? "" : m.content,
-            createdAt: m.created_at,
-            replyToId: m.reply_to_id ?? undefined,
-            reactions: (m.reactions ?? []).map((r: any) => ({ userId: r.user_id, emoji: r.emoji })),
-            voice: m.voice_meta ?? undefined,
-            isUnsent: m.is_unsent,
-          } as any);
-          if (m.is_unsent) store.markUnsent(peer, m.id);
-        }
-
-        subscribeToRoom(room.key, peer, me);
+        await setupRoom(room.key, room.user_a === me ? room.user_b : room.user_a);
       }
+    }
+
+    async function handleNewRoom(p: any) {
+      const room = p.new;
+      const peer = room.user_a === me ? room.user_b : room.user_a;
+      await setupRoom(room.key, peer);
+    }
+
+    async function setupRoom(key: string, peer: string) {
+      if (closed) return;
+      const store = useChatStore.getState();
+      store.ensureConversation(peer);
+
+      // Load message history
+      const { data: msgs } = await supabase
+        .from("messages")
+        .select("*, reactions(*)")
+        .eq("room_key", key)
+        .order("created_at");
+
+      if (closed) return;
+
+      for (const m of msgs ?? []) {
+        store.ingestRemoteMessage(peer, {
+          id: m.id,
+          senderId: m.sender_username,
+          type: m.type,
+          content: m.is_unsent ? "" : m.content,
+          createdAt: m.created_at,
+          replyToId: m.reply_to_id ?? undefined,
+          reactions: (m.reactions ?? []).map((r: any) => ({ userId: r.user_id, emoji: r.emoji })),
+          voice: m.voice_meta ?? undefined,
+          isUnsent: m.is_unsent,
+        } as any);
+        if (m.is_unsent) store.markUnsent(peer, m.id);
+      }
+
+      subscribeToRoom(key, peer, me);
     }
 
     function subscribeToRoom(key: string, peer: string, me: string) {

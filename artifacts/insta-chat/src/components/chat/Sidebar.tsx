@@ -250,7 +250,7 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
               {/* Found user card */}
               {checkState === "found" && foundUser && (
                 <div className="mt-3 flex items-center gap-3 bg-[#00d26a]/10 border border-[#00d26a]/25 rounded-xl px-3.5 py-3">
-                  <img src={`https://i.pravatar.cc/150?u=${foundUser}`} className="w-9 h-9 rounded-full ring-2 ring-[#00d26a]/30" alt="" />
+                  <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(foundUser)}&background=random&color=fff&size=150`} className="w-9 h-9 rounded-full ring-2 ring-[#00d26a]/30" alt="" />
                   <div>
                     <p className="text-[13px] text-white font-semibold">{foundUser}</p>
                     <p className="text-[12px] text-[#00d26a]">جاهز للدردشة ✓</p>

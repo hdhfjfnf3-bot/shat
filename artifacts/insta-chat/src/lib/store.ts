@@ -62,7 +62,7 @@ function makeUser(username: string): User {
     id: u,
     username: u,
     displayName: u.charAt(0).toUpperCase() + u.slice(1),
-    avatarUrl: `https://i.pravatar.cc/150?u=${u}`,
+    avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(u)}&background=random&color=fff&size=150`,
     isVerified: false,
     isOnline: true,
     lastSeenAt: new Date().toISOString(),

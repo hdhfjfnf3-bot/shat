@@ -5,7 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Inbox from "./pages/Inbox";
 import { useMe } from "@/lib/me";
-import { SetupScreen } from "@/components/SetupScreen";
+import { AuthScreen } from "@/components/AuthScreen";
 import { useRealtime } from "@/lib/realtime";
 
 const queryClient = new QueryClient();
@@ -26,10 +26,11 @@ function AppShell() {
 
 function App() {
   const username = useMe((s) => s.username);
+  const token = useMe((s) => s.token);
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        {username ? <AppShell /> : <SetupScreen />}
+        {username && token ? <AppShell /> : <AuthScreen />}
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

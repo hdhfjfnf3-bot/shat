@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
+    "dev": "pnpm run build && node --enable-source-maps ./dist/index.mjs",
+    "dev:win": "pnpm run build && cross-env PORT=3001 node --enable-source-maps ./dist/index.mjs",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -12,8 +13,10 @@
   "dependencies": {
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
+    "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2",
+    "jsonwebtoken": "^9.0.2",
     "drizzle-orm": "catalog:",
     "express": "^5",
     "pino": "^9",
@@ -21,8 +24,10 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
+    "@types/jsonwebtoken": "^9.0.6",
     "@types/express": "^5.0.6",
     "@types/node": "catalog:",
     "@types/ws": "^8.18.1",

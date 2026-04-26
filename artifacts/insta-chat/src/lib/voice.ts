@@ -19,11 +19,12 @@ export class VoiceRecorder {
   async start() {
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
+        echoCancellation: false, // Disabled for pure raw studio quality
+        noiseSuppression: false, // Disabled for pure raw studio quality
+        autoGainControl: false,  // Disabled for pure raw studio quality
         sampleRate: 48000,
-        channelCount: 1,
+        sampleSize: 24,          // 24-bit depth if supported
+        channelCount: 2,         // Stereo if possible
       },
     });
 
@@ -34,7 +35,7 @@ export class VoiceRecorder {
 
     this.recorder = new MediaRecorder(
       this.stream,
-      this.mime ? { mimeType: this.mime, audioBitsPerSecond: 128000 } : undefined,
+      this.mime ? { mimeType: this.mime, audioBitsPerSecond: 320000 } : undefined, // Extreme Studio Quality
     );
     this.chunks = [];
     this.recorder.ondataavailable = (e) => {

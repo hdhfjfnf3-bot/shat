@@ -1,167 +1,157 @@
 import { useEffect, useRef } from "react";
 import { useChatStore, setRealtimeAdapter } from "./store";
 import { useMe } from "./me";
-
-function buildWsUrl(): string {
-  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${window.location.host}/api/ws`;
-}
+import { supabase, roomKey } from "./supabase";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export function useRealtime() {
   const username = useMe((s) => s.username);
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectRef = useRef<number | null>(null);
+  const token = useMe((s) => s.token);
+  const channelsRef = useRef<RealtimeChannel[]>([]);
 
   useEffect(() => {
-    if (!username) return;
+    if (!username || !token) return;
+    const me = username.toLowerCase();
     let closed = false;
 
-    const connect = () => {
-      const ws = new WebSocket(buildWsUrl());
-      wsRef.current = ws;
+    // Cleanup previous channels
+    channelsRef.current.forEach((c) => c.unsubscribe());
+    channelsRef.current = [];
 
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ type: "hello", username }));
-      };
+    async function init() {
+      const store = useChatStore.getState();
 
-      ws.onmessage = (ev) => {
-        let data: any;
-        try {
-          data = JSON.parse(ev.data);
-        } catch {
-          return;
-        }
-        const store = useChatStore.getState();
+      // Load all rooms for this user
+      const { data: rooms } = await supabase
+        .from("rooms")
+        .select("*")
+        .or(`user_a.eq.${me},user_b.eq.${me}`);
 
-        if (data.type === "hello_ack") return;
+      if (closed) return;
 
-        if (data.type === "conversations" && Array.isArray(data.items)) {
-          for (const it of data.items) {
-            if (typeof it.peer !== "string") continue;
-            store.ensureConversation(it.peer);
-            if (it.lastMessage) {
-              store.ingestRemoteMessage(it.peer, {
-                id: it.lastMessage.id,
-                senderId: it.lastMessage.senderUsername,
-                type: it.lastMessage.type,
-                content: it.lastMessage.content,
-                createdAt: it.lastMessage.createdAt,
-                replyToId: it.lastMessage.replyToId,
-                reactions: it.lastMessage.reactions ?? [],
-                voice: it.lastMessage.voice,
-              } as any);
-            }
-            ws.send(JSON.stringify({ type: "history", peer: it.peer }));
-          }
-          return;
-        }
+      // Load history + subscribe for each room
+      for (const room of rooms ?? []) {
+        const peer = room.user_a === me ? room.user_b : room.user_a;
+        store.ensureConversation(peer);
 
-        if (data.type === "history" && typeof data.peer === "string" && Array.isArray(data.messages)) {
-          for (const m of data.messages) {
-            store.ingestRemoteMessage(data.peer, {
-              id: m.id,
-              senderId: m.senderUsername,
-              type: m.type,
-              content: m.content,
-              createdAt: m.createdAt,
-              replyToId: m.replyToId,
-              reactions: m.reactions ?? [],
-              voice: m.voice,
-              isUnsent: m.isUnsent,
-            } as any);
-            if (m.isUnsent) store.markUnsent(data.peer.toLowerCase(), m.id);
-          }
-          return;
-        }
+        // Load message history
+        const { data: msgs } = await supabase
+          .from("messages")
+          .select("*, reactions(*)")
+          .eq("room_key", room.key)
+          .order("created_at");
 
-        if (data.type === "message" && typeof data.peer === "string" && data.message) {
-          const m = data.message;
-          store.ingestRemoteMessage(data.peer, {
-            id: m.id,
-            senderId: m.senderUsername,
-            type: m.type,
-            content: m.content,
-            createdAt: m.createdAt,
-            replyToId: m.replyToId,
-            reactions: m.reactions ?? [],
-            voice: m.voice,
-          } as any);
-          return;
-        }
-
-        if (data.type === "react" && typeof data.peer === "string") {
-          store.setReactions(data.peer.toLowerCase(), data.messageId, data.reactions ?? []);
-          return;
-        }
-
-        if (data.type === "unsend" && typeof data.peer === "string") {
-          store.markUnsent(data.peer.toLowerCase(), data.messageId);
-          return;
-        }
-
-        if (data.type === "typing" && typeof data.peer === "string") {
-          store.setTyping(data.peer, !!data.isTyping);
-          return;
-        }
-      };
-
-      ws.onclose = () => {
         if (closed) return;
-        if (reconnectRef.current) window.clearTimeout(reconnectRef.current);
-        reconnectRef.current = window.setTimeout(connect, 1500);
-      };
 
-      ws.onerror = () => {
-        try {
-          ws.close();
-        } catch {}
-      };
-    };
+        for (const m of msgs ?? []) {
+          store.ingestRemoteMessage(peer, {
+            id: m.id,
+            senderId: m.sender_username,
+            type: m.type,
+            content: m.is_unsent ? "" : m.content,
+            createdAt: m.created_at,
+            replyToId: m.reply_to_id ?? undefined,
+            reactions: (m.reactions ?? []).map((r: any) => ({ userId: r.user_id, emoji: r.emoji })),
+            voice: m.voice_meta ?? undefined,
+            isUnsent: m.is_unsent,
+          } as any);
+          if (m.is_unsent) store.markUnsent(peer, m.id);
+        }
+
+        subscribeToRoom(room.key, peer, me);
+      }
+    }
+
+    function subscribeToRoom(key: string, peer: string, me: string) {
+      const store = useChatStore.getState();
+      const ch = supabase
+        .channel(`room:${key}`)
+        // New messages (Postgres Changes)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_key=eq.${key}` }, (p) => {
+          const m = p.new as any;
+          store.ingestRemoteMessage(peer, {
+            id: m.id, senderId: m.sender_username, type: m.type,
+            content: m.content, createdAt: m.created_at,
+            replyToId: m.reply_to_id ?? undefined, reactions: [], voice: m.voice_meta ?? undefined,
+          } as any);
+        })
+        // Unsent messages
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `room_key=eq.${key}` }, (p) => {
+          const m = p.new as any;
+          if (m.is_unsent) store.markUnsent(peer, m.id);
+        })
+        // Reactions
+        .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, async (p) => {
+          const row = (p.new ?? p.old) as any;
+          if (!row?.message_id) return;
+          const { data } = await supabase.from("reactions").select("*").eq("message_id", row.message_id);
+          if (data) store.setReactions(peer, row.message_id, data.map((r) => ({ userId: r.user_id, emoji: r.emoji })));
+        })
+        // Typing (broadcast)
+        .on("broadcast", { event: "typing" }, (p) => {
+          if (p.payload.to === me) store.setTyping(p.payload.from, p.payload.isTyping);
+        })
+        // Read receipts (broadcast)
+        .on("broadcast", { event: "read" }, (p) => {
+          if (p.payload.to === me) store.markPeerRead(p.payload.from);
+        })
+        .subscribe();
+
+      channelsRef.current.push(ch);
+    }
 
     setRealtimeAdapter({
       sendMessage: (to, msg) => {
-        const ws = wsRef.current;
-        if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-        ws.send(
-          JSON.stringify({
-            type: "send",
-            to,
-            message: {
-              id: msg.id,
-              type: msg.type,
-              content: msg.content,
-              replyToId: msg.replyToId,
-              voice: msg.voice,
-            },
-          }),
-        );
+        const key = roomKey(me, to);
+        // Ensure room exists
+        supabase.from("rooms").upsert({ key, user_a: me, user_b: to }, { onConflict: "key" }).then(() => {
+          supabase.from("messages").insert({
+            id: msg.id, room_key: key, sender_username: me,
+            type: msg.type, content: msg.content,
+            reply_to_id: msg.replyToId ?? null, voice_meta: msg.voice ?? null, is_unsent: false,
+          }).then(() => {
+            // Subscribe to new room if first message
+            const already = channelsRef.current.some((c) => (c as any).topic === `realtime:room:${key}`);
+            if (!already) subscribeToRoom(key, to, me);
+          });
+        });
         return true;
       },
       reactMessage: (peer, messageId, emoji) => {
-        const ws = wsRef.current;
-        if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-        ws.send(JSON.stringify({ type: "react", peer, messageId, emoji }));
+        supabase.from("reactions").select("*").eq("message_id", messageId).eq("user_id", me).then(({ data }) => {
+          if (data && data.length > 0 && data[0].emoji === emoji) {
+            supabase.from("reactions").delete().eq("message_id", messageId).eq("user_id", me);
+          } else {
+            supabase.from("reactions").delete().eq("message_id", messageId).eq("user_id", me).then(() => {
+              supabase.from("reactions").insert({ message_id: messageId, user_id: me, emoji });
+            });
+          }
+        });
         return true;
       },
       unsendMessage: (peer, messageId) => {
-        const ws = wsRef.current;
-        if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-        ws.send(JSON.stringify({ type: "unsend", peer, messageId }));
+        supabase.from("messages").update({ is_unsent: true, content: "" }).eq("id", messageId).eq("sender_username", me);
         return true;
+      },
+      sendTyping: (to, isTyping) => {
+        const key = roomKey(me, to);
+        const ch = channelsRef.current.find((c) => (c as any).topic === `realtime:room:${key}`);
+        ch?.send({ type: "broadcast", event: "typing", payload: { from: me, to, isTyping } });
+      },
+      sendRead: (to) => {
+        const key = roomKey(me, to);
+        const ch = channelsRef.current.find((c) => (c as any).topic === `realtime:room:${key}`);
+        ch?.send({ type: "broadcast", event: "read", payload: { from: me, to } });
       },
     });
 
-    connect();
+    init();
 
     return () => {
       closed = true;
-      if (reconnectRef.current) window.clearTimeout(reconnectRef.current);
-      try {
-        wsRef.current?.close();
-      } catch {}
-      wsRef.current = null;
+      channelsRef.current.forEach((c) => c.unsubscribe());
+      channelsRef.current = [];
       setRealtimeAdapter({});
     };
-  }, [username]);
-
+  }, [username, token]);
 }

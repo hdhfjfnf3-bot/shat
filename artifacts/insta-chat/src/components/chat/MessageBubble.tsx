@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { Copy, CornerUpLeft, Forward, Trash2, Smile } from "lucide-react";
+import { memo, useEffect, useRef, useState } from "react";
+import { Copy, CornerUpLeft, Trash2, Smile } from "lucide-react";
 import { Message, CURRENT_USER, User } from "@/lib/types";
 import { useChatStore } from "@/lib/store";
 import { EmojiText } from "./EmojiText";
@@ -8,17 +7,7 @@ import { VoiceMessage } from "./VoiceMessage";
 
 const QUICK_REACTIONS = ["❤️", "😂", "😮", "😢", "😡", "👍"];
 
-export function MessageBubble({
-  msg,
-  isOwn,
-  isFirstInGroup,
-  isLastInGroup,
-  isLastOverall,
-  borderRadius,
-  otherUser,
-  conversationId,
-  allMessages,
-}: {
+interface Props {
   msg: Message;
   isOwn: boolean;
   isFirstInGroup: boolean;
@@ -28,323 +17,218 @@ export function MessageBubble({
   otherUser?: User;
   conversationId: string;
   allMessages: Message[];
-}) {
+}
+
+export const MessageBubble = memo(function MessageBubble({
+  msg, isOwn, isFirstInGroup, isLastInGroup, isLastOverall,
+  borderRadius, otherUser, conversationId, allMessages,
+}: Props) {
   const { toggleReaction, unsendMessage, setReplyingTo } = useChatStore();
   const [showActions, setShowActions] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [showAllReactions, setShowAllReactions] = useState(false);
+  const [showReactions, setShowReactions] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const longPressTimer = useRef<number | null>(null);
-  const lastTap = useRef<number>(0);
+  const lastTap = useRef(0);
 
+  /* Close on outside click */
   useEffect(() => {
-    if (!showMenu && !showAllReactions) return;
-    const onDoc = (e: MouseEvent) => {
+    if (!showMenu && !showReactions) return;
+    const fn = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setShowMenu(false);
-        setShowAllReactions(false);
-        setShowActions(false);
+        setShowMenu(false); setShowReactions(false); setShowActions(false);
       }
     };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [showMenu, showAllReactions]);
-
-  const handleDoubleClick = () => {
-    if (msg.isUnsent) return;
-    toggleReaction(conversationId, msg.id, "❤️");
-  };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [showMenu, showReactions]);
 
   const handleTap = () => {
     const now = Date.now();
-    if (now - lastTap.current < 300) {
-      handleDoubleClick();
-    }
-    lastTap.current = now;
-  };
-
-  const startLongPress = () => {
-    longPressTimer.current = window.setTimeout(() => {
-      setShowActions(true);
-      setShowMenu(true);
-    }, 450);
-  };
-  const cancelLongPress = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
+    if (now - lastTap.current < 300 && !msg.isUnsent) {
+      toggleReaction(conversationId, msg.id, "❤️");
+      lastTap.current = 0; // reset to prevent triple tap bug
+    } else {
+      lastTap.current = now;
     }
   };
 
-  const replyTo = msg.replyToId ? allMessages.find((m) => m.id === msg.replyToId) : null;
+  const handleReply  = () => { setReplyingTo(conversationId, msg.id); setShowMenu(false); setShowActions(false); };
+  const handleCopy   = () => { navigator.clipboard.writeText(msg.content).catch(() => {}); setShowMenu(false); setShowActions(false); };
+  const handleUnsend = () => { unsendMessage(conversationId, msg.id); setShowMenu(false); setShowActions(false); };
+  const onReact = (emoji: string) => { toggleReaction(conversationId, msg.id, emoji); setShowReactions(false); setShowActions(false); };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(msg.content).catch(() => {});
-    setShowMenu(false);
-    setShowActions(false);
-  };
-
-  const handleReply = () => {
-    setReplyingTo(conversationId, msg.id);
-    setShowMenu(false);
-    setShowActions(false);
-  };
-
-  const handleUnsend = () => {
-    unsendMessage(conversationId, msg.id);
-    setShowMenu(false);
-    setShowActions(false);
-  };
-
-  const onReact = (emoji: string) => {
-    toggleReaction(conversationId, msg.id, emoji);
-    setShowActions(false);
-    setShowMenu(false);
-    setShowAllReactions(false);
-  };
-
-  // Aggregate reactions
   const reactions = msg.reactions ?? [];
-  const reactionCounts = reactions.reduce<Record<string, number>>((acc, r) => {
-    acc[r.emoji] = (acc[r.emoji] || 0) + 1;
-    return acc;
-  }, {});
+  const reactionCounts = reactions.reduce<Record<string, number>>((a, r) => ({ ...a, [r.emoji]: (a[r.emoji] || 0) + 1 }), {});
   const reactionEntries = Object.entries(reactionCounts);
   const myReaction = reactions.find((r) => r.userId === CURRENT_USER.id)?.emoji;
+  const replyTo = msg.replyToId ? allMessages.find((m) => m.id === msg.replyToId) : null;
 
+  /* ── Unsent ─────────────────────────────────────────────────── */
   if (msg.isUnsent) {
     return (
-      <div className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-2" : ""}`}>
-        {!isOwn && isLastInGroup && (
-          <div className="w-[28px] mr-2 flex-shrink-0 flex items-end pb-1">
-            <img src={otherUser?.avatarUrl} className="w-[28px] h-[28px] rounded-full object-cover" />
-          </div>
-        )}
-        {!isOwn && !isLastInGroup && <div className="w-[36px] flex-shrink-0" />}
-        <div className="px-[16px] py-[10px] text-[14px] italic text-[#a8a8a8] border border-[#363636] rounded-[22px]">
-          {isOwn ? "You unsent a message" : "Message was unsent"}
+      <div className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-[6px]" : "mt-[2px]"}`}>
+        {!isOwn && isLastInGroup && <div className="w-[26px] ml-2 flex-shrink-0 flex items-end pb-[2px]"><img src={otherUser?.avatarUrl} className="w-[26px] h-[26px] rounded-full object-cover" /></div>}
+        {!isOwn && !isLastInGroup && <div className="w-[34px] flex-shrink-0" />}
+        <div className="px-3.5 py-2 text-[13px] italic text-[#737373] border border-white/10 rounded-[18px]">
+          {isOwn ? "لقد سحبت رسالة" : "تم سحب الرسالة"}
         </div>
       </div>
     );
   }
 
+  /* ── Normal ─────────────────────────────────────────────────── */
   return (
-    <motion.div
+    <div
       ref={wrapRef}
-      initial={
-        isLastInGroup && isOwn && msg.status === "sending"
-          ? { opacity: 0, scale: 0.9, y: 10 }
-          : false
-      }
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 320, damping: 26 }}
-      className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-2" : ""} group relative`}
+      className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-[6px]" : "mt-[2px]"} relative group`}
       onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => {
-        if (!showMenu && !showAllReactions) setShowActions(false);
-      }}
+      onMouseLeave={() => { if (!showMenu && !showReactions) setShowActions(false); }}
     >
+      {/* Other user avatar */}
       {!isOwn && isLastInGroup && (
-        <div className="w-[28px] mr-2 flex-shrink-0 flex items-end pb-1">
-          <img src={otherUser?.avatarUrl} className="w-[28px] h-[28px] rounded-full object-cover" />
+        <div className="w-[26px] ml-2 flex-shrink-0 flex items-end pb-[2px]">
+          <img src={otherUser?.avatarUrl} className="w-[26px] h-[26px] rounded-full object-cover" />
         </div>
       )}
-      {!isOwn && !isLastInGroup && <div className="w-[36px] flex-shrink-0" />}
+      {!isOwn && !isLastInGroup && <div className="w-[34px] flex-shrink-0" />}
 
-      <div className="flex flex-col max-w-[75%] relative">
-        {/* Reply quote */}
+      <div className="flex flex-col max-w-[72%] relative">
+        {/* Reply preview */}
         {replyTo && (
-          <div
-            className={`text-[12px] text-[#a8a8a8] mb-[2px] ${isOwn ? "text-right pr-3" : "pl-3"}`}
-          >
-            <span className="opacity-70">
-              {isOwn ? "You replied" : `${otherUser?.displayName ?? "Them"} replied`}
-            </span>
+          <div className={`text-[11px] text-[#737373] mb-[2px] ${isOwn ? "text-left pl-3" : "text-right pr-3"}`}>
+            {isOwn ? "أنت ردّيت" : `${otherUser?.displayName ?? "الطرف الآخر"} ردّ`}
           </div>
         )}
         {replyTo && (
-          <div
-            className={`max-w-full mb-[-10px] pb-3 px-[14px] pt-[8px] text-[13px] rounded-[18px] bg-[#1c1c1c] text-[#a8a8a8] truncate ${isOwn ? "self-end" : "self-start"} border border-[#262626]`}
-            style={{ maxWidth: "100%" }}
-          >
-            <div className="truncate"><EmojiText text={replyTo.content} size={14} /></div>
+          <div className={`max-w-full mb-[-12px] pb-[14px] px-3.5 pt-2 text-[13px] rounded-[18px] bg-[#1a1a1a] text-[#a8a8a8] truncate ${isOwn ? "self-end" : "self-start"} border border-white/[0.04]`}>
+            <EmojiText text={replyTo.content} size={13} />
           </div>
         )}
 
-        <div className="relative flex items-center gap-2">
+        <div className="relative flex items-center gap-1.5">
+          {/* Own quick actions */}
           {isOwn && showActions && (
-            <div className="flex items-center gap-1 text-[#a8a8a8]">
-              <button
-                onClick={() => setShowMenu((s) => !s)}
-                className="hover:text-white p-1"
-                title="More"
-              >
-                <span className="text-[18px] leading-none">⋯</span>
+            <div className="flex items-center gap-0.5 text-[#555] px-1 animate-in fade-in zoom-in-95 duration-100">
+              <button onClick={() => setShowMenu((s) => !s)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 hover:text-white transition-colors" title="المزيد">
+                <span className="text-[14px] leading-none">⋯</span>
               </button>
-              <button onClick={handleReply} className="hover:text-white p-1" title="Reply">
-                <CornerUpLeft className="w-4 h-4" />
+              <button onClick={handleReply} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 hover:text-white transition-colors" title="ردّ">
+                <CornerUpLeft className="w-3.5 h-3.5" />
               </button>
-              <button
-                onClick={() => setShowAllReactions((s) => !s)}
-                className="hover:text-white p-1"
-                title="React"
-              >
-                <Smile className="w-4 h-4" />
+              <button onClick={() => setShowReactions((s) => !s)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 hover:text-white transition-colors" title="تفاعل">
+                <Smile className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
 
+          {/* Bubble */}
           <div
             onClick={handleTap}
-            onDoubleClick={handleDoubleClick}
-            onTouchStart={startLongPress}
-            onTouchEnd={cancelLongPress}
-            onTouchMove={cancelLongPress}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setShowActions(true);
-              setShowMenu(true);
-            }}
-            className={`relative ${msg.type === "voice" ? "px-3 py-2" : "px-[16px] py-[10px]"} text-[15px] leading-[19px] break-words cursor-pointer select-none ig-pop ${
-              isOwn ? "ig-gradient text-white" : "bg-[#262626] text-[#fafafa]"
+            onContextMenu={(e) => { e.preventDefault(); setShowActions(true); setShowMenu(true); }}
+            className={`relative select-none cursor-pointer ig-pop ${
+              msg.type === "like" ? "text-[44px] animate-heartBeat -my-2" :
+              msg.type === "image" || msg.type === "video" ? "p-0 overflow-hidden border border-white/10" :
+              msg.type === "voice" ? "px-3 py-2 text-[14px]" : "px-[14px] py-[8px] text-[14px]"
+            } leading-[1.3] break-words ${
+              msg.type === "like" ? "" :
+              msg.type === "image" || msg.type === "video" ? "bg-[#1a1a1a]" :
+              isOwn ? "bg-[#3797f0] text-white shadow-sm" : "bg-[#262626] text-[#fafafa]"
             }`}
-            style={{ borderRadius }}
+            style={{ borderRadius: msg.type === "like" ? "0" : borderRadius }}
             dir="auto"
           >
             {msg.type === "voice" && msg.voice ? (
-              <VoiceMessage
-                src={msg.content}
-                peaks={msg.voice.peaks}
-                duration={msg.voice.duration}
-                isOwn={isOwn}
-              />
+              <VoiceMessage src={msg.content} peaks={msg.voice.peaks} duration={msg.voice.duration} isOwn={isOwn} />
+            ) : msg.type === "like" ? (
+              "❤️"
+            ) : msg.type === "image" ? (
+              <img src={msg.content} alt="صورة" className="max-w-[240px] max-h-[320px] sm:max-w-[280px] object-cover" />
+            ) : msg.type === "video" ? (
+              <video src={msg.content} controls className="max-w-[240px] max-h-[320px] sm:max-w-[280px] object-cover bg-black" />
             ) : (
               <EmojiText text={msg.content} />
             )}
           </div>
 
+          {/* Other user quick actions */}
           {!isOwn && showActions && (
-            <div className="flex items-center gap-1 text-[#a8a8a8]">
-              <button
-                onClick={() => setShowAllReactions((s) => !s)}
-                className="hover:text-white p-1"
-                title="React"
-              >
-                <Smile className="w-4 h-4" />
+            <div className="flex items-center gap-0.5 text-[#555] px-1 animate-in fade-in zoom-in-95 duration-100">
+              <button onClick={() => setShowReactions((s) => !s)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 hover:text-white transition-colors">
+                <Smile className="w-3.5 h-3.5" />
               </button>
-              <button onClick={handleReply} className="hover:text-white p-1" title="Reply">
-                <CornerUpLeft className="w-4 h-4" />
+              <button onClick={handleReply} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 hover:text-white transition-colors">
+                <CornerUpLeft className="w-3.5 h-3.5" />
               </button>
-              <button
-                onClick={() => setShowMenu((s) => !s)}
-                className="hover:text-white p-1"
-                title="More"
-              >
-                <span className="text-[18px] leading-none">⋯</span>
+              <button onClick={() => setShowMenu((s) => !s)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 hover:text-white transition-colors">
+                <span className="text-[14px] leading-none">⋯</span>
               </button>
             </div>
           )}
 
-          {/* Quick reactions row */}
-          {showAllReactions && (
-            <motion.div
-              initial={{ opacity: 0, y: 6, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.12 }}
-              className={`absolute -top-12 ${isOwn ? "right-0" : "left-0"} z-30 bg-[#1a1a1a] border border-[#363636] rounded-full px-2 py-1.5 flex items-center gap-1 shadow-2xl`}
+          {/* Quick reactions */}
+          {showReactions && (
+            <div
+              className={`absolute -top-11 ${isOwn ? "right-0" : "left-0"} z-[60] bg-[#1a1a1a] border border-white/10 rounded-full px-1.5 py-1 flex items-center gap-0.5 shadow-2xl ring-1 ring-black/5`}
+              style={{ animation: "bubblePop 0.15s cubic-bezier(.34,1.3,.64,1) both" }}
             >
               {QUICK_REACTIONS.map((e) => (
                 <button
                   key={e}
                   onClick={() => onReact(e)}
-                  className={`w-8 h-8 rounded-full text-[20px] hover:scale-125 transition-transform leading-none ${myReaction === e ? "bg-[#262626]" : ""}`}
+                  className={`w-8 h-8 rounded-full text-[20px] flex items-center justify-center hover:scale-125 hover:-translate-y-1 transition-transform leading-none ${myReaction === e ? "bg-white/10" : ""}`}
                 >
                   <EmojiText text={e} size={22} />
                 </button>
               ))}
-            </motion.div>
+            </div>
           )}
 
           {/* Context menu */}
           {showMenu && (
-            <motion.div
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.12 }}
-              className={`absolute top-full mt-2 ${isOwn ? "right-0" : "left-0"} z-30 w-[180px] bg-[#1a1a1a] border border-[#363636] rounded-xl overflow-hidden shadow-2xl`}
+            <div
+              className={`absolute top-full mt-2 ${isOwn ? "right-0" : "left-0"} z-[60] w-[180px] bg-[#262626] rounded-[14px] overflow-hidden shadow-2xl ring-1 ring-black/5`}
+              style={{ animation: "bubblePop 0.15s cubic-bezier(.34,1.3,.64,1) both" }}
             >
-              <MenuItem icon={<CornerUpLeft className="w-4 h-4" />} label="Reply" onClick={handleReply} />
-              <MenuItem icon={<Copy className="w-4 h-4" />} label="Copy" onClick={handleCopy} />
-              <MenuItem icon={<Forward className="w-4 h-4" />} label="Forward" onClick={() => setShowMenu(false)} />
-              {isOwn && (
-                <MenuItem
-                  icon={<Trash2 className="w-4 h-4" />}
-                  label="Unsend"
-                  onClick={handleUnsend}
-                  destructive
-                />
-              )}
-            </motion.div>
+              <MI icon={<CornerUpLeft className="w-[18px] h-[18px]" />} label="ردّ" onClick={handleReply} />
+              <MI icon={<Copy className="w-[18px] h-[18px]" />} label="نسخ" onClick={handleCopy} />
+              {isOwn && <div className="h-px bg-white/10 mx-3 my-1" />}
+              {isOwn && <MI icon={<Trash2 className="w-[18px] h-[18px]" />} label="سحب الرسالة" onClick={handleUnsend} destructive />}
+            </div>
           )}
         </div>
 
-        {/* Reactions chip */}
+        {/* Reaction chips */}
         {reactionEntries.length > 0 && (
-          <div
-            className={`flex ${isOwn ? "justify-end" : "justify-start"} -mt-2 z-10 ${isOwn ? "pr-2" : "pl-2"}`}
-          >
-            <div className="bg-[#1f1f1f] border border-[#0a0a0a] rounded-full px-2 py-[2px] flex items-center gap-1 text-[12px] text-white shadow">
-              {reactionEntries.map(([emoji, count]) => (
-                <button
-                  key={emoji}
-                  onClick={() => onReact(emoji)}
-                  className="flex items-center gap-0.5 hover:scale-110 transition-transform"
-                >
-                  <EmojiText text={emoji} size={14} />
-                  {count > 1 && <span className="text-[11px] text-[#a8a8a8]">{count}</span>}
-                </button>
-              ))}
+          <div className={`flex ${isOwn ? "justify-end" : "justify-start"} -mt-2 z-[50] ${isOwn ? "pr-3" : "pl-3"} relative`}>
+            <div className="bg-[#000] p-[2px] rounded-full inline-flex">
+              <div className="bg-[#262626] rounded-full px-1.5 py-[2px] flex items-center gap-1 text-[11px] shadow-sm cursor-pointer hover:bg-[#333] transition-colors">
+                {reactionEntries.map(([emoji, count]) => (
+                  <button key={emoji} onClick={() => onReact(emoji)} className="flex items-center gap-0.5 active:scale-90 transition-transform">
+                    <EmojiText text={emoji} size={12} />
+                    {count > 1 && <span className="text-[#a8a8a8] font-medium">{count}</span>}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Status */}
+        {/* Delivery status */}
         {isOwn && isLastInGroup && isLastOverall && (
-          <div className="text-[12px] text-[#a8a8a8] mt-1 text-right mr-1 transition-all">
-            {msg.status === "sending" ? (
-              <span className="italic">Sending...</span>
-            ) : msg.status === "sent" ? (
-              "Sent"
-            ) : msg.status === "delivered" ? (
-              "Delivered"
-            ) : (
-              "Seen"
-            )}
+          <div className="text-[11px] text-[#737373] mt-1 text-left font-medium animate-in fade-in duration-300">
+            {msg.status === "sending" ? "جاري الإرسال..." : msg.status === "sent" ? "تم الإرسال" : msg.status === "delivered" ? "تم التسليم" : "مقروءة"}
           </div>
         )}
       </div>
-    </motion.div>
+    </div>
   );
-}
+});
 
-function MenuItem({
-  icon,
-  label,
-  onClick,
-  destructive,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  destructive?: boolean;
-}) {
+function MI({ icon, label, onClick, destructive }: { icon: React.ReactNode; label: string; onClick: () => void; destructive?: boolean }) {
   return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[#262626] text-left text-[14px] ${destructive ? "text-[#ed4956]" : "text-[#fafafa]"}`}
-    >
+    <button onClick={onClick} className={`w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 active:bg-white/10 text-[14px] transition-colors ${destructive ? "text-[#ed4956]" : "text-[#fafafa]"}`}>
+      <span className="font-medium">{label}</span>
       {icon}
-      <span>{label}</span>
     </button>
   );
 }

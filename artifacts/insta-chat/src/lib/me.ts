@@ -3,16 +3,18 @@ import { persist } from "zustand/middleware";
 
 interface MeState {
   username: string;
-  setUsername: (u: string) => void;
-  clearUsername: () => void;
+  token: string | null;
+  setAuth: (u: string, t: string) => void;
+  clearAuth: () => void;
 }
 
 export const useMe = create<MeState>()(
   persist(
     (set) => ({
       username: "",
-      setUsername: (u) => set({ username: u.trim().toLowerCase().replace(/^@/, "") }),
-      clearUsername: () => set({ username: "" }),
+      token: null,
+      setAuth: (u, t) => set({ username: u.trim().toLowerCase().replace(/^@/, ""), token: t }),
+      clearAuth: () => set({ username: "", token: null }),
     }),
     { name: "ig-me" },
   ),

@@ -1,11 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { Conversation, Message, User, CURRENT_USER, MessageStatus, VoiceMeta } from "./types";
+import { sounds } from "./sounds";
 
 type SendMeta = {
   id: string;
   content: string;
-  type: "text" | "image" | "voice" | "like";
+  type: "text" | "image" | "video" | "voice" | "like";
   replyToId?: string;
   voice?: VoiceMeta;
 };
@@ -14,6 +15,8 @@ type RealtimeAdapter = {
   sendMessage?: (toUsername: string, msg: SendMeta) => boolean;
   reactMessage?: (peer: string, messageId: string, emoji: string) => boolean;
   unsendMessage?: (peer: string, messageId: string) => boolean;
+  sendTyping?: (to: string, isTyping: boolean) => void;
+  sendRead?: (to: string) => void;
 };
 
 const realtime: RealtimeAdapter = {};
@@ -22,6 +25,12 @@ export function setRealtimeAdapter(a: RealtimeAdapter) {
   realtime.sendMessage = a.sendMessage;
   realtime.reactMessage = a.reactMessage;
   realtime.unsendMessage = a.unsendMessage;
+  realtime.sendTyping = a.sendTyping;
+  realtime.sendRead = a.sendRead;
+}
+
+export function sendTypingSignal(to: string, isTyping: boolean) {
+  realtime.sendTyping?.(to, isTyping);
 }
 
 interface ChatState {
@@ -31,13 +40,14 @@ interface ChatState {
   replyingTo: Record<string, string | null>;
   typingPeers: Record<string, boolean>;
   setActiveConversation: (id: string | null) => void;
-  sendMessage: (conversationId: string, content: string, type?: "text" | "image" | "like" | "voice", replyToId?: string, voice?: VoiceMeta) => void;
+  sendMessage: (conversationId: string, content: string, type?: "text" | "image" | "video" | "like" | "voice", replyToId?: string, voice?: VoiceMeta) => void;
   updateMessageStatus: (conversationId: string, messageId: string, status: MessageStatus) => void;
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => void;
   setReactions: (conversationId: string, messageId: string, reactions: { userId: string; emoji: string }[]) => void;
   unsendMessage: (conversationId: string, messageId: string) => void;
   markUnsent: (conversationId: string, messageId: string) => void;
   markAsRead: (conversationId: string) => void;
+  markPeerRead: (peerUsername: string) => void;
   ingestRemoteMessage: (peerUsername: string, message: Omit<Message, "conversationId" | "status"> & { senderId: string }) => void;
   setReplyingTo: (conversationId: string, messageId: string | null) => void;
   ensureConversation: (peerUsername: string) => string;
@@ -75,7 +85,11 @@ export const useChatStore = create<ChatState>()(
       },
 
       setTyping: (peer, isTyping) => {
-        set((state) => ({ typingPeers: { ...state.typingPeers, [peer.toLowerCase()]: isTyping } }));
+        const p = peer.toLowerCase();
+        if (isTyping && !get().typingPeers[p]) {
+          sounds.playTyping();
+        }
+        set((state) => ({ typingPeers: { ...state.typingPeers, [p]: isTyping } }));
       },
 
       setActiveConversation: (id) => {
@@ -150,6 +164,7 @@ export const useChatStore = create<ChatState>()(
         });
 
         if (sent) {
+          sounds.playSend();
           setTimeout(() => get().updateMessageStatus(conversationId, id, "sent"), 200);
         } else {
           setTimeout(() => get().updateMessageStatus(conversationId, id, "sent"), 300);
@@ -225,16 +240,49 @@ export const useChatStore = create<ChatState>()(
         set((state) => {
           const conv = state.conversations[conversationId];
           if (!conv || conv.unreadCount === 0) return state;
+          realtime.sendRead?.(conversationId);
           return {
             conversations: { ...state.conversations, [conversationId]: { ...conv, unreadCount: 0 } },
           };
         });
       },
 
+      markPeerRead: (peerUsername: string) => {
+        const convId = peerUsername.toLowerCase();
+        let changed = false;
+        set((state) => {
+          const list = state.messages[convId] || [];
+          const nextList = list.map((m) => {
+            if (m.senderId === CURRENT_USER.username && (m.status === "sent" || m.status === "delivered")) {
+              changed = true;
+              return { ...m, status: "seen" as MessageStatus };
+            }
+            return m;
+          });
+          if (!changed) return state;
+          return { messages: { ...state.messages, [convId]: nextList } };
+        });
+        if (changed) sounds.playSeen();
+      },
+
       ingestRemoteMessage: (peerUsername, msg) => {
         const me = CURRENT_USER.username;
         const convId = get().ensureConversation(peerUsername);
         const isOwn = msg.senderId.toLowerCase() === me.toLowerCase();
+        
+        if (!isOwn) {
+           const isUnread = get().activeConversationId !== convId || document.hidden;
+           if (isUnread) {
+             sounds.playReceive();
+             if (Notification.permission === "granted") {
+               new Notification(`رسالة من ${peerUsername}`, {
+                 body: msg.type === "text" ? msg.content : `أرسل لك مرفقاً`,
+                 icon: "/favicon.ico"
+               });
+             }
+           }
+        }
+
         set((state) => {
           const list = state.messages[convId] || [];
           if (list.some((m) => m.id === msg.id)) {

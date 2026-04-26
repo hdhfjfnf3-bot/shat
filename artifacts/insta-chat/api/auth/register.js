@@ -25,7 +25,7 @@ export default async function handler(req, res) {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const { error } = await supabase.from("users").insert({ username: normalized, password_hash: passwordHash });
-  if (error) { res.status(500).json({ error: "خطأ في إنشاء الحساب." }); return; }
+  if (error) { res.status(500).json({ error: "خطأ في إنشاء الحساب: " + error.message, details: error }); return; }
 
   const token = jwt.sign({ username: normalized }, JWT_SECRET, { expiresIn: "30d" });
   res.status(201).json({ user: { username: normalized }, token });

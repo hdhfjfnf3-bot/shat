@@ -45,7 +45,7 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
       if (clean === username?.toLowerCase()) { setCheckState("notfound"); return; }
       setCheckState("loading");
       try {
-        const res = await fetch(`/api/auth/check-user/${encodeURIComponent(clean)}`,
+        const res = await fetch(`/api/auth/check-user?username=${encodeURIComponent(clean)}`,
           { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         if (res.status === 404) { setCheckState("notfound"); setFoundUser(null); return; }
         if (!res.ok) { setCheckState("error"); return; }

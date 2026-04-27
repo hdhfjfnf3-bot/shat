@@ -22,11 +22,15 @@ export function useRealtime() {
     async function init() {
       const store = useChatStore.getState();
 
-      // Listen for NEW rooms being created for this user (so chats appear instantly)
+      // Listen for ANY room changes (INSERT or UPDATE from upsert) to ensure we catch new chats
       const globalCh = supabase
         .channel(`global:${me}`)
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "rooms", filter: `user_a=eq.${me}` }, (p) => handleNewRoom(p.new as any))
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "rooms", filter: `user_b=eq.${me}` }, (p) => handleNewRoom(p.new as any))
+        .on("postgres_changes", { event: "*", schema: "public", table: "rooms" }, (p) => {
+          const r = (p.new || p.old) as any;
+          if (r && (r.user_a === me || r.user_b === me)) {
+            handleNewRoom(r);
+          }
+        })
         .subscribe();
       channelMap.current.set("__global__", globalCh);
 
@@ -56,31 +60,7 @@ export function useRealtime() {
       const store = useChatStore.getState();
       store.ensureConversation(peer);
 
-      // Load message history
-      const { data: msgs } = await supabase
-        .from("messages")
-        .select("*, reactions(*)")
-        .eq("room_key", key)
-        .order("created_at");
-
-      if (closed) return;
-
-      for (const m of msgs ?? []) {
-        store.ingestRemoteMessage(peer, {
-          id: m.id,
-          senderId: m.sender_username,
-          type: m.type,
-          content: m.is_unsent ? "" : m.content,
-          createdAt: m.created_at,
-          replyToId: m.reply_to_id ?? undefined,
-          reactions: (m.reactions ?? []).map((r: any) => ({ userId: r.user_id, emoji: r.emoji })),
-          voice: m.voice_meta ?? undefined,
-          isUnsent: m.is_unsent,
-        } as any);
-        if (m.is_unsent) store.markUnsent(peer, m.id);
-      }
-
-      // Subscribe to real-time events for this room
+      // 1. Subscribe to real-time events for this room FIRST to avoid race conditions
       const ch = supabase
         .channel(`room:${key}`, {
           config: { broadcast: { ack: false } },
@@ -107,11 +87,11 @@ export function useRealtime() {
           const { data } = await supabase.from("reactions").select("*").eq("message_id", row.message_id);
           if (data) useChatStore.getState().setReactions(peer, row.message_id, data.map((r) => ({ userId: r.user_id, emoji: r.emoji })));
         })
-        // Typing indicator (ephemeral broadcast)
+        // Typing indicator
         .on("broadcast", { event: "typing" }, (p) => {
           if (p.payload?.to === me) useChatStore.getState().setTyping(p.payload.from, p.payload.isTyping);
         })
-        // Read receipt (ephemeral broadcast)
+        // Read receipt
         .on("broadcast", { event: "read" }, (p) => {
           if (p.payload?.to === me) useChatStore.getState().markPeerRead(p.payload.from);
         })
@@ -121,7 +101,32 @@ export function useRealtime() {
           }
         });
 
+      // Mark as subscribed immediately so we don't duplicate
       channelMap.current.set(key, ch);
+
+      // 2. THEN load message history to ensure no gap
+      const { data: msgs } = await supabase
+        .from("messages")
+        .select("*, reactions(*)")
+        .eq("room_key", key)
+        .order("created_at");
+
+      if (closed) return;
+
+      for (const m of msgs ?? []) {
+        store.ingestRemoteMessage(peer, {
+          id: m.id,
+          senderId: m.sender_username,
+          type: m.type,
+          content: m.is_unsent ? "" : m.content,
+          createdAt: m.created_at,
+          replyToId: m.reply_to_id ?? undefined,
+          reactions: (m.reactions ?? []).map((r: any) => ({ userId: r.user_id, emoji: r.emoji })),
+          voice: m.voice_meta ?? undefined,
+          isUnsent: m.is_unsent,
+        } as any);
+        if (m.is_unsent) store.markUnsent(peer, m.id);
+      }
     }
 
     // ── Realtime adapter (store → Supabase) ──────────────────────────
@@ -130,14 +135,16 @@ export function useRealtime() {
         const key = roomKey(me, to);
         supabase.from("rooms")
           .upsert({ key, user_a: me, user_b: to }, { onConflict: "key" })
-          .then(() => {
+          .then(({ error: roomErr }) => {
+            if (roomErr) console.error("Room upsert error:", roomErr);
             supabase.from("messages").insert({
               id: msg.id, room_key: key, sender_username: me,
               type: msg.type, content: msg.content,
               reply_to_id: msg.replyToId ?? null,
               voice_meta: msg.voice ?? null,
               is_unsent: false,
-            }).then(() => {
+            }).then(({ error: msgErr }) => {
+              if (msgErr) console.error("Msg insert error:", msgErr);
               // Subscribe to this room if not already done
               if (!channelMap.current.has(key)) setupRoom(key, to);
             });

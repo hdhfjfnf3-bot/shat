@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -7,11 +8,34 @@ import Inbox from "./pages/Inbox";
 import { useMe } from "@/lib/me";
 import { AuthScreen } from "@/components/AuthScreen";
 import { useRealtime } from "@/lib/realtime";
+import { sounds } from "@/lib/sounds";
 
 const queryClient = new QueryClient();
 
+// Unlock AudioContext on first user gesture anywhere in the app
+function useAudioUnlock() {
+  useEffect(() => {
+    const unlock = () => {
+      sounds.unlock();
+      // Also ask for notification permission on first gesture
+      if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+      }
+    };
+    window.addEventListener("click", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    window.addEventListener("touchstart", unlock, { once: true });
+    return () => {
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("keydown", unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+  }, []);
+}
+
 function AppShell() {
   useRealtime();
+  useAudioUnlock();
   return (
     <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
       <Switch>

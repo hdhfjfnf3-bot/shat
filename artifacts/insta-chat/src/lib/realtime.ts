@@ -7,7 +7,8 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 export function useRealtime() {
   const username = useMe((s) => s.username);
   const token = useMe((s) => s.token);
-  const channelsRef = useRef<RealtimeChannel[]>([]);
+  // Use a Map<roomKey, channel> for O(1) lookup in typing/read
+  const channelMap = useRef<Map<string, RealtimeChannel>>(new Map());
 
   useEffect(() => {
     if (!username || !token) return;
@@ -15,20 +16,21 @@ export function useRealtime() {
     let closed = false;
 
     // Cleanup previous channels
-    channelsRef.current.forEach((c) => c.unsubscribe());
-    channelsRef.current = [];
+    channelMap.current.forEach((ch) => ch.unsubscribe());
+    channelMap.current.clear();
 
     async function init() {
       const store = useChatStore.getState();
 
-      // Listen for new rooms being created where I am a participant
-      const globalCh = supabase.channel(`global:${me}`)
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "rooms", filter: `user_a=eq.${me}` }, handleNewRoom)
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "rooms", filter: `user_b=eq.${me}` }, handleNewRoom)
+      // Listen for NEW rooms being created for this user (so chats appear instantly)
+      const globalCh = supabase
+        .channel(`global:${me}`)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "rooms", filter: `user_a=eq.${me}` }, (p) => handleNewRoom(p.new as any))
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "rooms", filter: `user_b=eq.${me}` }, (p) => handleNewRoom(p.new as any))
         .subscribe();
-      channelsRef.current.push(globalCh);
+      channelMap.current.set("__global__", globalCh);
 
-      // Load all existing rooms for this user
+      // Load all existing rooms
       const { data: rooms } = await supabase
         .from("rooms")
         .select("*")
@@ -37,18 +39,20 @@ export function useRealtime() {
       if (closed) return;
 
       for (const room of rooms ?? []) {
-        await setupRoom(room.key, room.user_a === me ? room.user_b : room.user_a);
+        const peer = room.user_a === me ? room.user_b : room.user_a;
+        await setupRoom(room.key, peer);
       }
     }
 
-    async function handleNewRoom(p: any) {
-      const room = p.new;
+    async function handleNewRoom(room: any) {
       const peer = room.user_a === me ? room.user_b : room.user_a;
       await setupRoom(room.key, peer);
     }
 
     async function setupRoom(key: string, peer: string) {
       if (closed) return;
+      if (channelMap.current.has(key)) return; // already subscribed
+
       const store = useChatStore.getState();
       store.ensureConversation(peer);
 
@@ -76,89 +80,104 @@ export function useRealtime() {
         if (m.is_unsent) store.markUnsent(peer, m.id);
       }
 
-      subscribeToRoom(key, peer, me);
-    }
-
-    function subscribeToRoom(key: string, peer: string, me: string) {
-      const store = useChatStore.getState();
+      // Subscribe to real-time events for this room
       const ch = supabase
         .channel(`room:${key}`)
-        // New messages (Postgres Changes)
+        // New messages
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_key=eq.${key}` }, (p) => {
           const m = p.new as any;
-          store.ingestRemoteMessage(peer, {
+          useChatStore.getState().ingestRemoteMessage(peer, {
             id: m.id, senderId: m.sender_username, type: m.type,
             content: m.content, createdAt: m.created_at,
-            replyToId: m.reply_to_id ?? undefined, reactions: [], voice: m.voice_meta ?? undefined,
+            replyToId: m.reply_to_id ?? undefined, reactions: [],
+            voice: m.voice_meta ?? undefined,
           } as any);
         })
         // Unsent messages
         .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `room_key=eq.${key}` }, (p) => {
           const m = p.new as any;
-          if (m.is_unsent) store.markUnsent(peer, m.id);
+          if (m.is_unsent) useChatStore.getState().markUnsent(peer, m.id);
         })
         // Reactions
         .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, async (p) => {
           const row = (p.new ?? p.old) as any;
           if (!row?.message_id) return;
           const { data } = await supabase.from("reactions").select("*").eq("message_id", row.message_id);
-          if (data) store.setReactions(peer, row.message_id, data.map((r) => ({ userId: r.user_id, emoji: r.emoji })));
+          if (data) useChatStore.getState().setReactions(peer, row.message_id, data.map((r) => ({ userId: r.user_id, emoji: r.emoji })));
         })
-        // Typing (broadcast)
+        // Typing indicator (ephemeral broadcast)
         .on("broadcast", { event: "typing" }, (p) => {
-          if (p.payload.to === me) store.setTyping(p.payload.from, p.payload.isTyping);
+          if (p.payload?.to === me) useChatStore.getState().setTyping(p.payload.from, p.payload.isTyping);
         })
-        // Read receipts (broadcast)
+        // Read receipt (ephemeral broadcast)
         .on("broadcast", { event: "read" }, (p) => {
-          if (p.payload.to === me) store.markPeerRead(p.payload.from);
+          if (p.payload?.to === me) useChatStore.getState().markPeerRead(p.payload.from);
         })
-        .subscribe();
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED" && !channelMap.current.has(key)) {
+            channelMap.current.set(key, ch);
+          }
+        });
 
-      channelsRef.current.push(ch);
+      channelMap.current.set(key, ch);
     }
 
+    // ── Realtime adapter (store → Supabase) ──────────────────────────
     setRealtimeAdapter({
       sendMessage: (to, msg) => {
         const key = roomKey(me, to);
-        // Ensure room exists
-        supabase.from("rooms").upsert({ key, user_a: me, user_b: to }, { onConflict: "key" }).then(() => {
-          supabase.from("messages").insert({
-            id: msg.id, room_key: key, sender_username: me,
-            type: msg.type, content: msg.content,
-            reply_to_id: msg.replyToId ?? null, voice_meta: msg.voice ?? null, is_unsent: false,
-          }).then(() => {
-            // Subscribe to new room if first message
-            const already = channelsRef.current.some((c) => (c as any).topic === `realtime:room:${key}`);
-            if (!already) subscribeToRoom(key, to, me);
-          });
-        });
-        return true;
-      },
-      reactMessage: (peer, messageId, emoji) => {
-        supabase.from("reactions").select("*").eq("message_id", messageId).eq("user_id", me).then(({ data }) => {
-          if (data && data.length > 0 && data[0].emoji === emoji) {
-            supabase.from("reactions").delete().eq("message_id", messageId).eq("user_id", me);
-          } else {
-            supabase.from("reactions").delete().eq("message_id", messageId).eq("user_id", me).then(() => {
-              supabase.from("reactions").insert({ message_id: messageId, user_id: me, emoji });
+        supabase.from("rooms")
+          .upsert({ key, user_a: me, user_b: to }, { onConflict: "key" })
+          .then(() => {
+            supabase.from("messages").insert({
+              id: msg.id, room_key: key, sender_username: me,
+              type: msg.type, content: msg.content,
+              reply_to_id: msg.replyToId ?? null,
+              voice_meta: msg.voice ?? null,
+              is_unsent: false,
+            }).then(() => {
+              // Subscribe to this room if not already done
+              if (!channelMap.current.has(key)) setupRoom(key, to);
             });
-          }
-        });
+          });
         return true;
       },
-      unsendMessage: (peer, messageId) => {
-        supabase.from("messages").update({ is_unsent: true, content: "" }).eq("id", messageId).eq("sender_username", me);
+
+      reactMessage: (_peer, messageId, emoji) => {
+        supabase.from("reactions")
+          .select("*").eq("message_id", messageId).eq("user_id", me)
+          .then(({ data }) => {
+            if (data?.[0]?.emoji === emoji) {
+              supabase.from("reactions").delete().eq("message_id", messageId).eq("user_id", me);
+            } else {
+              supabase.from("reactions").delete().eq("message_id", messageId).eq("user_id", me)
+                .then(() => supabase.from("reactions").insert({ message_id: messageId, user_id: me, emoji }));
+            }
+          });
         return true;
       },
+
+      unsendMessage: (_peer, messageId) => {
+        supabase.from("messages")
+          .update({ is_unsent: true, content: "" })
+          .eq("id", messageId).eq("sender_username", me);
+        return true;
+      },
+
       sendTyping: (to, isTyping) => {
         const key = roomKey(me, to);
-        const ch = channelsRef.current.find((c) => (c as any).topic === `realtime:room:${key}`);
-        ch?.send({ type: "broadcast", event: "typing", payload: { from: me, to, isTyping } });
+        const ch = channelMap.current.get(key);
+        if (ch) {
+          ch.send({ type: "broadcast", event: "typing", payload: { from: me, to, isTyping } });
+        }
       },
+
       sendRead: (to) => {
         const key = roomKey(me, to);
-        const ch = channelsRef.current.find((c) => (c as any).topic === `realtime:room:${key}`);
-        ch?.send({ type: "broadcast", event: "read", payload: { from: me, to } });
+        const ch = channelMap.current.get(key);
+        if (ch) {
+          ch.send({ type: "broadcast", event: "read", payload: { from: me, to } });
+        }
       },
     });
 
@@ -166,8 +185,8 @@ export function useRealtime() {
 
     return () => {
       closed = true;
-      channelsRef.current.forEach((c) => c.unsubscribe());
-      channelsRef.current = [];
+      channelMap.current.forEach((ch) => ch.unsubscribe());
+      channelMap.current.clear();
       setRealtimeAdapter({});
     };
   }, [username, token]);

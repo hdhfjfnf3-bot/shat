@@ -69,6 +69,9 @@ function makeUser(username: string): User {
   };
 }
 
+// Track when the app started to avoid playing sounds for history messages
+const APP_START = Date.now();
+
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
@@ -269,18 +272,28 @@ export const useChatStore = create<ChatState>()(
         const me = CURRENT_USER.username;
         const convId = get().ensureConversation(peerUsername);
         const isOwn = msg.senderId.toLowerCase() === me.toLowerCase();
-        
-        if (!isOwn) {
-           const isUnread = get().activeConversationId !== convId || document.hidden;
-           if (isUnread) {
-             sounds.playReceive();
-             if (Notification.permission === "granted") {
-               new Notification(`رسالة من ${peerUsername}`, {
-                 body: msg.type === "text" ? msg.content : `أرسل لك مرفقاً`,
-                 icon: "/favicon.ico"
-               });
-             }
-           }
+        // Only play sounds for NEW messages (not history loaded on startup)
+        const isNew = new Date(msg.createdAt).getTime() > APP_START - 3000;
+
+        if (!isOwn && isNew) {
+          const isVisible = get().activeConversationId === convId && !document.hidden;
+          if (!isVisible) {
+            // App is in background or different chat → notification sound + browser notification
+            sounds.playNotification();
+            if (Notification.permission === "granted") {
+              new Notification(`رسالة جديدة من ${peerUsername}`, {
+                body: msg.type === "text" ? msg.content :
+                      msg.type === "voice" ? "🎤 رسالة صوتية" :
+                      msg.type === "image" ? "📷 صورة" :
+                      msg.type === "like"  ? "❤️ أرسل لك إعجاب" : "📎 مرفق",
+                icon: "/favicon.ico",
+                tag: convId, // deduplicate per conversation
+              });
+            }
+          } else {
+            // Chat is open → subtle receive sound only
+            sounds.playReceive();
+          }
         }
 
         set((state) => {

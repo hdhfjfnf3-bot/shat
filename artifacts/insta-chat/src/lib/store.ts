@@ -331,7 +331,7 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: "ig-direct-storage",
-      version: 3,
+      version: 4,
       migrate: () => ({
         conversations: {},
         messages: {},

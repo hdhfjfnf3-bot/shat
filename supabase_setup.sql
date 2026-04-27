@@ -49,9 +49,26 @@ CREATE INDEX IF NOT EXISTS idx_reactions_message_id ON reactions(message_id);
 
 -- ── 3. ENABLE REALTIME ─────────────────────────
 
-ALTER PUBLICATION supabase_realtime ADD TABLE messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE rooms;
-ALTER PUBLICATION supabase_realtime ADD TABLE reactions;
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'messages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'rooms'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE rooms;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'reactions'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE reactions;
+  END IF;
+END $$;
 
 -- ── 4. ROW LEVEL SECURITY (disable for now) ────
 -- We rely on the service_role key in API routes for writes

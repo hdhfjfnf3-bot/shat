@@ -82,7 +82,9 @@ export function useRealtime() {
 
       // Subscribe to real-time events for this room
       const ch = supabase
-        .channel(`room:${key}`)
+        .channel(`room:${key}`, {
+          config: { broadcast: { ack: false } },
+        })
         // New messages
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_key=eq.${key}` }, (p) => {
           const m = p.new as any;

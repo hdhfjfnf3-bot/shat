@@ -293,6 +293,10 @@ export const useChatStore = create<ChatState>()(
           } else {
             // Chat is open → subtle receive sound only
             sounds.playReceive();
+            // Automatically mark as read and notify peer
+            setTimeout(() => {
+              get().markAsRead(convId);
+            }, 500);
           }
         }
 

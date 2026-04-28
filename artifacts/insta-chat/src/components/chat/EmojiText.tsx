@@ -88,7 +88,7 @@ export function EmojiText({ text, size = 20, disableJumbo = false }: { text?: st
             alt={m[0]}
             draggable={false}
             onError={onErr}
-            style={{ height: 56, width: 56, display: "inline-block" }}
+            style={{ height: 34, width: 34, display: "inline-block" }}
           />,
         );
       }
@@ -96,7 +96,7 @@ export function EmojiText({ text, size = 20, disableJumbo = false }: { text?: st
     return <span style={{ lineHeight: 1 }}>{jumbo}</span>;
   }
   if (isJumbo && !disableJumbo && style === "native") {
-    return <span style={{ fontSize: 56, lineHeight: 1 }}>{safe}</span>;
+    return <span style={{ fontSize: 34, lineHeight: 1 }}>{safe}</span>;
   }
 
   return <>{parts}</>;

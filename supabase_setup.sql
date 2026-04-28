@@ -74,12 +74,84 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- ── 4. ROW LEVEL SECURITY (disable for now) ────
+-- ── 4. ROW LEVEL SECURITY / POLICIES ────────────
+-- This app currently writes to Supabase directly from the client for
+-- chat rooms/messages/reactions, and uses custom auth instead of Supabase Auth.
+-- Because of that, production must either disable RLS for these tables OR
+-- provide permissive policies. We do both here defensively so existing
+-- projects that have RLS enabled stop failing with 42501 errors.
 
-ALTER TABLE users    DISABLE ROW LEVEL SECURITY;
-ALTER TABLE rooms    DISABLE ROW LEVEL SECURITY;
-ALTER TABLE messages DISABLE ROW LEVEL SECURITY;
-ALTER TABLE reactions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+
+ALTER TABLE rooms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reactions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "public rooms read" ON rooms;
+DROP POLICY IF EXISTS "public rooms insert" ON rooms;
+DROP POLICY IF EXISTS "public rooms update" ON rooms;
+DROP POLICY IF EXISTS "public rooms delete" ON rooms;
+
+DROP POLICY IF EXISTS "public messages read" ON messages;
+DROP POLICY IF EXISTS "public messages insert" ON messages;
+DROP POLICY IF EXISTS "public messages update" ON messages;
+DROP POLICY IF EXISTS "public messages delete" ON messages;
+
+DROP POLICY IF EXISTS "public reactions read" ON reactions;
+DROP POLICY IF EXISTS "public reactions insert" ON reactions;
+DROP POLICY IF EXISTS "public reactions update" ON reactions;
+DROP POLICY IF EXISTS "public reactions delete" ON reactions;
+
+CREATE POLICY "public rooms read"
+ON rooms FOR SELECT
+USING (true);
+
+CREATE POLICY "public rooms insert"
+ON rooms FOR INSERT
+WITH CHECK (true);
+
+CREATE POLICY "public rooms update"
+ON rooms FOR UPDATE
+USING (true)
+WITH CHECK (true);
+
+CREATE POLICY "public rooms delete"
+ON rooms FOR DELETE
+USING (true);
+
+CREATE POLICY "public messages read"
+ON messages FOR SELECT
+USING (true);
+
+CREATE POLICY "public messages insert"
+ON messages FOR INSERT
+WITH CHECK (true);
+
+CREATE POLICY "public messages update"
+ON messages FOR UPDATE
+USING (true)
+WITH CHECK (true);
+
+CREATE POLICY "public messages delete"
+ON messages FOR DELETE
+USING (true);
+
+CREATE POLICY "public reactions read"
+ON reactions FOR SELECT
+USING (true);
+
+CREATE POLICY "public reactions insert"
+ON reactions FOR INSERT
+WITH CHECK (true);
+
+CREATE POLICY "public reactions update"
+ON reactions FOR UPDATE
+USING (true)
+WITH CHECK (true);
+
+CREATE POLICY "public reactions delete"
+ON reactions FOR DELETE
+USING (true);
 
 -- ── 5. AUTH RPC FUNCTIONS ───────────────────────
 -- All run as SECURITY DEFINER so the anon key can call them safely.

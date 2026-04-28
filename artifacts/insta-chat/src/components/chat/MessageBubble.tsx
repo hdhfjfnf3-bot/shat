@@ -251,7 +251,7 @@ export const MessageBubble = memo(function MessageBubble({
             onClick={handleTap}
             onContextMenu={(e) => { e.preventDefault(); setShowActions(true); setShowMenu(true); }}
             className={`relative select-none cursor-pointer ig-pop ${
-              msg.type === "like" || isOnlyEmoji ? "text-[44px] animate-heartBeat -my-2" :
+              msg.type === "like" || isOnlyEmoji ? "text-[30px] -my-1" :
               msg.type === "image" || msg.type === "video" ? "p-0 overflow-hidden border border-white/10" :
               msg.type === "voice" ? "px-3 py-2 text-[14px]" :
               msg.type === "game" ? "p-0 overflow-hidden border border-white/10 bg-[#1a1a1a]" :

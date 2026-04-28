@@ -68,6 +68,16 @@ export function Thread({ activeId }: { activeId: string }) {
   const items: Array<{ type: "sep"; label: string } | { type: "msg"; idx: number }> = [];
   let lastDay = "";
   messages.forEach((msg, idx) => {
+    // Hide game move payloads so they don't clutter the chat history!
+    if (msg.type === "game") {
+      try {
+        const payload = JSON.parse(msg.content);
+        if (payload && payload.kind && !payload.kind.endsWith("_start") && payload.kind !== "hub") {
+          return; // Skip rendering this message
+        }
+      } catch {}
+    }
+
     const day = formatDay(msg.createdAt);
     if (day !== lastDay) { items.push({ type: "sep", label: day }); lastDay = day; }
     items.push({ type: "msg", idx });

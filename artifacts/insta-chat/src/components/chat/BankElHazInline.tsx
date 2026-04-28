@@ -1,95 +1,60 @@
-import { useMemo } from "react";
-
+import { useMemo, useState, useEffect } from "react";
 import { Message } from "@/lib/types";
 import { useMe } from "@/lib/me";
 import { useChatStore } from "@/lib/store";
+import { Coins, HelpCircle, Siren, Train, Zap, Droplets, MapPin, Building2, Gavel } from "lucide-react";
 
-type BankStartPayload = {
-  kind: "bank_start";
-  gameId: string;
-  createdBy: string;
-  createdAt: string;
-  token: "🚗" | "🏎️" | "🚕" | "🛻";
-};
+type BankStartPayload = { kind: "bank_start"; gameId: string; createdBy: string; createdAt: string; token: "🚗" | "🏎️" | "🚕" | "🛻" };
+type BankJoinPayload = { kind: "bank_join"; gameId: string; by: string; token: "🚗" | "🏎️" | "🚕" | "🛻"; at: string };
+type BankRollPayload = { kind: "bank_roll"; gameId: string; by: string; d1: number; d2: number; at: string };
+type BankBuyPayload = { kind: "bank_buy"; gameId: string; by: string; square: number; at: string };
+type BankPayPayload = { kind: "bank_pay"; gameId: string; by: string; to: string; amount: number; reason: string; at: string };
+type BankUpgradePayload = { kind: "bank_upgrade"; gameId: string; by: string; square: number; at: string };
+type BankSellPayload = { kind: "bank_sell"; gameId: string; by: string; square: number; at: string };
 
-type BankJoinPayload = {
-  kind: "bank_join";
-  gameId: string;
-  by: string;
-  token: "🚗" | "🏎️" | "🚕" | "🛻";
-  at: string;
-};
-
-type BankRollPayload = {
-  kind: "bank_roll";
-  gameId: string;
-  by: string;
-  d1: 1 | 2 | 3 | 4 | 5 | 6;
-  d2: 1 | 2 | 3 | 4 | 5 | 6;
-  at: string;
-};
-
-type BankBuyPayload = {
-  kind: "bank_buy";
-  gameId: string;
-  by: string;
-  square: number;
-  at: string;
-};
-
-type BankPayPayload = {
-  kind: "bank_pay";
-  gameId: string;
-  by: string;
-  to: string;
-  amount: number;
-  reason: "rent" | "tax";
-  at: string;
-};
-
-type BankPayload = BankStartPayload | BankJoinPayload | BankRollPayload | BankBuyPayload | BankPayPayload;
+type BankPayload = BankStartPayload | BankJoinPayload | BankRollPayload | BankBuyPayload | BankPayPayload | BankUpgradePayload | BankSellPayload;
 
 type Square =
-  | { kind: "go"; name: "انطلاق"; salary: number }
+  | { kind: "go"; name: "البداية"; salary: number }
   | { kind: "property"; name: string; price: number; rent: number; color: string }
   | { kind: "tax"; name: string; amount: number }
-  | { kind: "chance"; name: "حظ"; min: number; max: number };
+  | { kind: "chance"; name: string; min: number; max: number }
+  | { kind: "jail"; name: "السجن" }
+  | { kind: "parking"; name: "استراحة" }
+  | { kind: "gotojail"; name: "البوليس" }
+  | { kind: "utility"; name: string; price: number; type: "water" | "electric" | "station" };
 
 const TOKENS: Array<BankStartPayload["token"]> = ["🚗", "🏎️", "🚕", "🛻"];
 
 const BOARD: Square[] = [
-  { kind: "go", name: "انطلاق", salary: 200 },
-  { kind: "property", name: "شارع الهرم", price: 120, rent: 18, color: "أحمر" },
-  { kind: "chance", name: "حظ", min: -120, max: 160 },
-  { kind: "property", name: "فيصل", price: 140, rent: 22, color: "أحمر" },
-  { kind: "tax", name: "ضريبة", amount: 120 },
-  { kind: "property", name: "المعادي", price: 160, rent: 26, color: "أزرق" },
-  { kind: "property", name: "الزمالك", price: 180, rent: 30, color: "أزرق" },
-  { kind: "chance", name: "حظ", min: -160, max: 200 },
-  { kind: "property", name: "مدينة نصر", price: 200, rent: 34, color: "أصفر" },
-  { kind: "tax", name: "فاتورة مفاجئة", amount: 80 },
-  { kind: "property", name: "العباسية", price: 220, rent: 38, color: "أصفر" },
-  { kind: "chance", name: "حظ", min: -200, max: 240 },
-  { kind: "property", name: "الشيخ زايد", price: 240, rent: 42, color: "أخضر" },
-  { kind: "property", name: "التجمع", price: 260, rent: 46, color: "أخضر" },
-  { kind: "tax", name: "رسوم", amount: 100 },
-  { kind: "property", name: "العجوزة", price: 280, rent: 52, color: "بنفسجي" },
-  { kind: "chance", name: "حظ", min: -220, max: 280 },
-  { kind: "property", name: "6 أكتوبر", price: 300, rent: 56, color: "بنفسجي" },
-  { kind: "property", name: "المهندسين", price: 320, rent: 60, color: "أسود" },
-  { kind: "tax", name: "ضريبة رفاهية", amount: 140 },
+  { kind: "go", name: "البداية", salary: 200 }, // 0
+  { kind: "property", name: "المطرية", price: 60, rent: 10, color: "أحمر" }, // 1
+  { kind: "chance", name: "محطة حظ", min: -50, max: 100 }, // 2
+  { kind: "property", name: "شبرا", price: 60, rent: 10, color: "أحمر" }, // 3
+  { kind: "tax", name: "ضريبة", amount: 50 }, // 4
+  { kind: "property", name: "دمنهور", price: 100, rent: 15, color: "أزرق" }, // 5
+  { kind: "jail", name: "السجن" }, // 6
+  { kind: "property", name: "طنطا", price: 100, rent: 15, color: "أزرق" }, // 7
+  { kind: "utility", name: "المياه", price: 150, type: "water" }, // 8
+  { kind: "chance", name: "محاكمة", min: -100, max: 0 }, // 9
+  { kind: "property", name: "المنصورة", price: 120, rent: 20, color: "أصفر" }, // 10
+  { kind: "property", name: "الزقازيق", price: 120, rent: 20, color: "أصفر" }, // 11
+  { kind: "parking", name: "جراج" }, // 12
+  { kind: "property", name: "الإسماعيلية", price: 140, rent: 25, color: "أخضر" }, // 13
+  { kind: "tax", name: "رسوم", amount: 100 }, // 14
+  { kind: "property", name: "السويس", price: 140, rent: 25, color: "أخضر" }, // 15
+  { kind: "property", name: "بورسعيد", price: 160, rent: 30, color: "أخضر" }, // 16
+  { kind: "chance", name: "محطة حظ", min: 0, max: 200 }, // 17
+  { kind: "gotojail", name: "البوليس" }, // 18
+  { kind: "property", name: "الإسكندرية", price: 200, rent: 40, color: "بنفسجي" }, // 19
+  { kind: "utility", name: "الكهرباء", price: 150, type: "electric" }, // 20
+  { kind: "property", name: "القاهرة", price: 300, rent: 50, color: "بنفسجي" }, // 21
+  { kind: "tax", name: "ضريبة", amount: 150 }, // 22
+  { kind: "property", name: "أسوان", price: 400, rent: 70, color: "أسود" }, // 23
 ];
 
 function safeJsonParse<T>(s: string): T | null {
-  try {
-    return JSON.parse(s) as T;
-  } catch {
-    return null;
-  }
-}
-
-function clamp(n: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, n));
+  try { return JSON.parse(s) as T; } catch { return null; }
 }
 
 function pickRandomToken(exclude?: string | null): BankStartPayload["token"] {
@@ -97,301 +62,454 @@ function pickRandomToken(exclude?: string | null): BankStartPayload["token"] {
   return (list[Math.floor(Math.random() * list.length)] ?? TOKENS[0]) as BankStartPayload["token"];
 }
 
-function squareLabel(i: number, s: Square): string {
-  if (s.kind === "go") return `#${i} ${s.name}`;
-  if (s.kind === "property") return `#${i} ${s.name} (${s.color})`;
-  if (s.kind === "tax") return `#${i} ${s.name}`;
-  return `#${i} ${s.name}`;
-}
-
 function mod(n: number, m: number): number {
   return ((n % m) + m) % m;
 }
 
-export function BankElHazInline({
-  gameMessage,
-  otherUserId,
-  conversationId,
-  allMessages,
-}: {
-  gameMessage: Message;
-  otherUserId: string;
-  conversationId: string;
-  allMessages: Message[];
-}) {
+const DiceFace = ({ value, rolling }: { value: number; rolling: boolean }) => {
+  const dots = {
+    1: [[50, 50]],
+    2: [[20, 20], [80, 80]],
+    3: [[20, 20], [50, 50], [80, 80]],
+    4: [[20, 20], [20, 80], [80, 20], [80, 80]],
+    5: [[20, 20], [20, 80], [50, 50], [80, 20], [80, 80]],
+    6: [[20, 20], [20, 50], [20, 80], [80, 20], [80, 50], [80, 80]]
+  }[value] || [[50, 50]];
+
+  return (
+    <div className={`w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-white to-gray-200 rounded-lg shadow-[inset_0_-2px_4px_rgba(0,0,0,0.3),0_4px_8px_rgba(0,0,0,0.4)] relative ${rolling ? "animate-spin" : ""}`} style={{ transformStyle: "preserve-3d" }}>
+      {dots.map(([x, y], i) => (
+        <div key={i} className="absolute w-2 h-2 bg-gradient-to-br from-gray-800 to-black rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)]" style={{ top: `${y}%`, left: `${x}%`, transform: 'translate(-50%, -50%)' }} />
+      ))}
+    </div>
+  );
+};
+
+export function BankElHazInline({ gameMessage, otherUserId, conversationId, allMessages }: { gameMessage: Message; otherUserId: string; conversationId: string; allMessages: Message[] }) {
   const me = useMe((s) => s.username).toLowerCase();
   const { sendMessage } = useChatStore();
+  const [isRolling, setIsRolling] = useState(false);
+  const [displayDice, setDisplayDice] = useState<[number, number]>([6, 6]);
 
   const start = useMemo(() => safeJsonParse<BankStartPayload>(gameMessage.content), [gameMessage.content]);
   const gameId = start?.kind === "bank_start" ? start.gameId : null;
 
   const events = useMemo(() => {
     if (!gameId) return [] as BankPayload[];
-    const out: BankPayload[] = [];
-    for (const m of allMessages) {
-      if (m.type !== "game") continue;
-      const p = safeJsonParse<BankPayload>(m.content);
-      if (!p || p.gameId !== gameId) continue;
-      out.push(p);
-    }
-    return out;
+    return allMessages
+      .filter((m) => m.type === "game")
+      .map((m) => safeJsonParse<BankPayload>(m.content))
+      .filter((p): p is BankPayload => p !== null && p.gameId === gameId)
+      .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   }, [allMessages, gameId]);
 
   const state = useMemo(() => {
     const createdBy = (start?.createdBy ?? me).toLowerCase();
     const p1 = createdBy;
     const p2 = otherUserId;
-
-    const tokenBy: Record<string, BankStartPayload["token"]> = {
-      [p1]: start?.token ?? "🚗",
-    };
+    const tokenBy: Record<string, BankStartPayload["token"]> = { [p1]: start?.token ?? "🚗" };
 
     let joined = false;
     let turn = p1;
     let pos: Record<string, number> = { [p1]: 0, [p2]: 0 };
     let cash: Record<string, number> = { [p1]: 1500, [p2]: 1500 };
     let owner: Record<number, string> = {};
-    let last: { text: string; by?: string } | null = null;
+    let houses: Record<number, number> = {};
+    let inJail: Record<string, boolean> = {};
+    let bankrupt: Record<string, boolean> = { [p1]: false, [p2]: false };
+    let last: { text: string; by?: string; icon?: string } | null = null;
+    let currentDice: [number, number] = [6, 6];
+
+    const autoSell = (player: string) => {
+      while ((cash[player] ?? 0) < 0) {
+        const owned = Object.keys(owner).map(Number).filter(k => owner[k] === player);
+        if (owned.length === 0) break;
+        const sqIdx = owned[0]!;
+        const sq = BOARD[sqIdx];
+        if (sq && (sq.kind === "property" || sq.kind === "utility")) {
+          const sellValue = Math.floor(sq.price / 2) + (houses[sqIdx] ?? 0) * Math.floor(sq.price / 4);
+          cash[player] = (cash[player] ?? 0) + sellValue;
+          delete owner[sqIdx];
+          delete houses[sqIdx];
+          last = { by: player, text: `اضطر لبيع ${sq.name} لسداد الديون`, icon: "📉" };
+        }
+      }
+      if ((cash[player] ?? 0) < 0) bankrupt[player] = true;
+    };
 
     const applyPay = (by: string, to: string, amount: number, reason: string) => {
       cash[by] = (cash[by] ?? 0) - amount;
       cash[to] = (cash[to] ?? 0) + amount;
-      last = { by, text: `💸 دفع ${amount}$ لـ ${to} (${reason})` };
+      last = { by, text: `دفع ${amount}$ لـ ${tokenBy[to] ?? "الخصم"} (${reason})`, icon: "💸" };
+      autoSell(by);
     };
 
     for (const e of events) {
+      if (bankrupt[p1] || bankrupt[p2]) continue;
+
       if (e.kind === "bank_join") {
         tokenBy[e.by.toLowerCase()] = e.token;
         joined = true;
-        last = { by: e.by, text: `🚗 انضم بعربية ${e.token}` };
+        last = { by: e.by, text: `انضم للعبة بعربية ${e.token}`, icon: "🏁" };
       }
 
       if (e.kind === "bank_roll") {
         const by = e.by.toLowerCase();
-        if (by !== turn) {
-          continue;
-        }
+        if (by !== turn) continue;
+        currentDice = [e.d1, e.d2];
         const steps = e.d1 + e.d2;
+        const isDouble = e.d1 === e.d2;
+
+        if (inJail[by]) {
+          if (isDouble) {
+            inJail[by] = false;
+            last = { by, text: `رمى مزدوج وخرج من السجن!`, icon: "🔓" };
+          } else {
+            cash[by] = (cash[by] ?? 0) - 50;
+            inJail[by] = false;
+            autoSell(by);
+            last = { by, text: `دفع 50$ كفالة وخرج من السجن`, icon: "💰" };
+          }
+        }
+
         const from = pos[by] ?? 0;
         const next = from + steps;
         const wrapped = next >= BOARD.length;
         pos[by] = mod(next, BOARD.length);
 
-        if (wrapped) {
-          const go = BOARD[0] as Extract<Square, { kind: "go" }>;
-          cash[by] = (cash[by] ?? 0) + go.salary;
+        if (wrapped && !inJail[by]) {
+          cash[by] = (cash[by] ?? 0) + 200;
         }
 
         const sq = BOARD[pos[by]!]!;
-        last = { by, text: `🎲 ${e.d1}+${e.d2} = ${steps} → وقفت على ${squareLabel(pos[by]!, sq)}` };
+        if (!inJail[by] || isDouble) {
+          last = { by, text: `وصل إلى ${sq.name}`, icon: "📍" };
+        }
 
-        // Auto actions: tax & chance.
-        if (sq.kind === "tax") {
+        if (sq.kind === "gotojail") {
+          pos[by] = 6;
+          inJail[by] = true;
+          last = { by, text: `البوليس قبض عليه! ذهاب للسجن`, icon: "🚨" };
+        } else if (sq.kind === "tax") {
           cash[by] = (cash[by] ?? 0) - sq.amount;
-          last = { by, text: `🧾 ${sq.name}: -${sq.amount}$` };
-        }
-        if (sq.kind === "chance") {
-          const delta = Math.floor((sq.min + sq.max) / 2);
-          // deterministic-ish "luck": based on steps
-          const applied = delta === 0 ? 40 : delta;
+          last = { by, text: `دفع ضريبة ${sq.amount}$`, icon: "🧾" };
+          autoSell(by);
+        } else if (sq.kind === "chance") {
+          const delta = Math.floor(Math.random() * (sq.max - sq.min + 1)) + sq.min;
+          const applied = delta === 0 ? 50 : delta;
           cash[by] = (cash[by] ?? 0) + applied;
-          last = { by, text: `🎁 حظ: ${applied >= 0 ? "+" : ""}${applied}$` };
-        }
-
-        // Rent auto-pay only when opponent owns.
-        if (sq.kind === "property") {
+          last = { by, text: `بطاقة حظ: ${applied >= 0 ? "+" : ""}${applied}$`, icon: applied >= 0 ? "🎁" : "⚖️" };
+          autoSell(by);
+        } else if (sq.kind === "property" || sq.kind === "utility") {
           const o = owner[pos[by]!];
           if (o && o !== by) {
-            applyPay(by, o, sq.rent, "إيجار");
+            let rent = sq.kind === "property" ? sq.rent : steps * 5;
+            if (sq.kind === "property") {
+              const h = houses[pos[by]!] ?? 0;
+              rent = Math.floor(rent * (1 + h * 1.5));
+            }
+            applyPay(by, o, rent, "إيجار");
           }
         }
 
-        // Switch turn after rolling.
-        turn = by === p1 ? p2 : p1;
+        turn = (isDouble && !inJail[by] && !bankrupt[by]) ? by : (by === p1 ? p2 : p1);
       }
 
       if (e.kind === "bank_buy") {
         const by = e.by.toLowerCase();
         const sq = BOARD[e.square];
-        if (!sq || sq.kind !== "property") continue;
-        if (owner[e.square]) continue;
-        if ((pos[by] ?? -1) !== e.square) continue;
-        if ((cash[by] ?? 0) < sq.price) continue;
-        cash[by] = (cash[by] ?? 0) - sq.price;
-        owner[e.square] = by;
-        last = { by, text: `🏠 اشترى ${sq.name} بـ ${sq.price}$` };
+        if (sq && (sq.kind === "property" || sq.kind === "utility") && !owner[e.square] && (pos[by] ?? -1) === e.square && (cash[by] ?? 0) >= sq.price) {
+          cash[by] -= sq.price;
+          owner[e.square] = by;
+          last = { by, text: `اشترى صك ${sq.name}`, icon: "📜" };
+        }
       }
 
-      if (e.kind === "bank_pay") {
-        applyPay(e.by.toLowerCase(), e.to.toLowerCase(), clamp(e.amount, 0, 99999), e.reason);
+      if (e.kind === "bank_upgrade") {
+        const by = e.by.toLowerCase();
+        const sq = BOARD[e.square];
+        if (owner[e.square] === by && sq && sq.kind === "property") {
+          const cost = Math.floor(sq.price / 2);
+          if ((cash[by] ?? 0) >= cost && (houses[e.square] ?? 0) < 4) {
+            cash[by] -= cost;
+            houses[e.square] = (houses[e.square] ?? 0) + 1;
+            last = { by, text: `بنى ${houses[e.square] === 4 ? "فندق 🏨" : "بيت 🏠"} في ${sq.name}`, icon: "🏗️" };
+          }
+        }
+      }
+
+      if (e.kind === "bank_sell") {
+        const by = e.by.toLowerCase();
+        const sq = BOARD[e.square];
+        if (owner[e.square] === by && sq && (sq.kind === "property" || sq.kind === "utility")) {
+          const sellValue = Math.floor(sq.price / 2) + (houses[e.square] ?? 0) * Math.floor(sq.price / 4);
+          cash[by] = (cash[by] ?? 0) + sellValue;
+          delete owner[e.square];
+          delete houses[e.square];
+          last = { by, text: `باع ${sq.name} للبنك`, icon: "🏦" };
+        }
       }
     }
 
     const p1Token = tokenBy[p1] ?? "🚗";
     const p2Token = tokenBy[p2] ?? pickRandomToken(p1Token);
 
-    return {
-      p1,
-      p2,
-      tokens: { [p1]: p1Token, [p2]: p2Token } as Record<string, BankStartPayload["token"]>,
-      joined,
-      turn,
-      pos,
-      cash,
-      owner,
-      last,
-    };
+    return { p1, p2, tokens: { [p1]: p1Token, [p2]: p2Token }, joined, turn, pos, cash, owner, houses, inJail, bankrupt, last, currentDice };
   }, [events, me, otherUserId, start?.createdBy, start?.token]);
 
+  useEffect(() => {
+    if (!isRolling) {
+      setDisplayDice(state.currentDice);
+    }
+  }, [state.currentDice, isRolling]);
+
   if (!start || !gameId) {
-    return (
-      <div className="rounded-2xl border border-white/10 bg-[#141414] p-3 text-[13px] text-[#a8a8a8]">
-        رسالة بنك الحظ غير صالحة.
-      </div>
-    );
+    return <div className="rounded-2xl border border-white/10 bg-[#141414] p-3 text-[13px] text-[#a8a8a8]">لعبة بنك الحظ غير صالحة.</div>;
   }
 
-  const myTurn = state.turn === me;
+  const myTurn = state.turn === me && !state.bankrupt[me];
   const mePos = state.pos[me] ?? 0;
   const otherPos = state.pos[otherUserId] ?? 0;
   const meCash = state.cash[me] ?? 0;
   const otherCash = state.cash[otherUserId] ?? 0;
 
   const sq = BOARD[mePos]!;
-  const canBuy = sq.kind === "property" && !state.owner[mePos] && meCash >= sq.price;
+  const amOwner = state.owner[mePos] === me;
+  const canBuy = (sq.kind === "property" || sq.kind === "utility") && !state.owner[mePos] && meCash >= sq.price;
+  const canUpgrade = sq.kind === "property" && amOwner && meCash >= Math.floor(sq.price / 2) && (state.houses[mePos] ?? 0) < 4;
+  const canSell = amOwner;
 
-  const join = () => {
-    const payload: BankJoinPayload = {
-      kind: "bank_join", gameId, by: me,
-      token: pickRandomToken(state.tokens[state.p1]),
-      at: new Date().toISOString(),
-    };
-    sendMessage(conversationId, JSON.stringify(payload), "game");
-  };
+  const join = () => sendMessage(conversationId, JSON.stringify({ kind: "bank_join", gameId, by: me, token: pickRandomToken(state.tokens[state.p1]), at: new Date().toISOString() }), "game");
+  const buy = () => canBuy && sendMessage(conversationId, JSON.stringify({ kind: "bank_buy", gameId, by: me, square: mePos, at: new Date().toISOString() }), "game");
+  const upgrade = () => canUpgrade && sendMessage(conversationId, JSON.stringify({ kind: "bank_upgrade", gameId, by: me, square: mePos, at: new Date().toISOString() }), "game");
+  const sell = () => canSell && sendMessage(conversationId, JSON.stringify({ kind: "bank_sell", gameId, by: me, square: mePos, at: new Date().toISOString() }), "game");
 
   const roll = () => {
-    if (!myTurn) return;
-    const d1 = (Math.floor(Math.random() * 6) + 1) as BankRollPayload["d1"];
-    const d2 = (Math.floor(Math.random() * 6) + 1) as BankRollPayload["d2"];
-    const payload: BankRollPayload = {
-      kind: "bank_roll", gameId, by: me, d1, d2, at: new Date().toISOString(),
-    };
-    sendMessage(conversationId, JSON.stringify(payload), "game");
+    if (!myTurn || isRolling) return;
+    setIsRolling(true);
+    let spins = 0;
+    const interval = setInterval(() => {
+      setDisplayDice([Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1]);
+      spins++;
+      if (spins > 10) clearInterval(interval);
+    }, 50);
+
+    setTimeout(() => {
+      clearInterval(interval);
+      const d1 = Math.floor(Math.random() * 6) + 1;
+      const d2 = Math.floor(Math.random() * 6) + 1;
+      sendMessage(conversationId, JSON.stringify({ kind: "bank_roll", gameId, by: me, d1, d2, at: new Date().toISOString() }), "game");
+      setIsRolling(false);
+    }, 600);
   };
 
-  const buy = () => {
-    if (!canBuy) return;
-    const payload: BankBuyPayload = {
-      kind: "bank_buy", gameId, by: me, square: mePos, at: new Date().toISOString(),
-    };
-    sendMessage(conversationId, JSON.stringify(payload), "game");
-  };
-
-  function getGridArea(index: number) {
-    if (index >= 0 && index <= 5) return { gridColumn: 6 - index, gridRow: 6 };
-    if (index >= 6 && index <= 9) return { gridColumn: 1, gridRow: 6 - (index - 5) };
-    if (index >= 10 && index <= 15) return { gridColumn: index - 9, gridRow: 1 };
-    if (index >= 16 && index <= 19) return { gridColumn: 6, gridRow: index - 14 };
-    return {};
+  function getCellPos(index: number) {
+    let col = 0, row = 0;
+    if (index >= 0 && index <= 6) { col = 6 - index; row = 6; }
+    else if (index >= 7 && index <= 11) { col = 0; row = 6 - (index - 6); }
+    else if (index >= 12 && index <= 18) { col = index - 12; row = 0; }
+    else if (index >= 19 && index <= 23) { col = 6; row = index - 18; }
+    return { left: `${(col / 7) * 100}%`, top: `${(row / 7) * 100}%`, width: `${100/7}%`, height: `${100/7}%` };
   }
 
   function getColorClass(c: string) {
     switch(c) {
-      case "أحمر": return "bg-[#ef4444]";
+      case "أحمر": return "bg-[#ff4d4d]";
       case "أزرق": return "bg-[#3b82f6]";
-      case "أصفر": return "bg-[#eab308]";
+      case "أصفر": return "bg-[#fbbf24]";
       case "أخضر": return "bg-[#22c55e]";
       case "بنفسجي": return "bg-[#a855f7]";
-      case "أسود": return "bg-[#555]";
+      case "أسود": return "bg-[#1f2937]";
       default: return "bg-transparent";
     }
   }
 
-  return (
-    <div className="rounded-2xl border border-white/10 bg-[#141414] overflow-hidden w-[280px] sm:w-[340px]">
-      <div className="p-2 aspect-square relative flex items-center justify-center">
+  function renderSquare(sq: Square, i: number) {
+    const isOwnedByMe = state.owner[i] === me;
+    const isOwnedByOther = state.owner[i] === otherUserId;
+    const ownerColor = isOwnedByMe ? "border-b-4 border-b-[#0095f6]" : isOwnedByOther ? "border-b-4 border-b-[#ed4956]" : "";
+
+    return (
+      <div 
+        key={i} 
+        className={`absolute bg-[#f9f8f3] border border-[#d4c8b8] shadow-sm flex flex-col items-center justify-between overflow-hidden ${ownerColor}`}
+        style={getCellPos(i)}
+      >
+        {sq.kind === "property" && (
+          <div className={`w-full h-[26%] border-b border-[#d4c8b8] shadow-sm ${getColorClass(sq.color)}`} />
+        )}
         
-        {/* The Board Grid */}
-        <div className="absolute inset-2 grid grid-cols-6 grid-rows-6 gap-1" dir="ltr">
-          {BOARD.map((square, i) => {
-            const hasMe = mePos === i;
-            const hasOther = otherPos === i;
-            const isOwnedByMe = state.owner[i] === me;
-            const isOwnedByOther = state.owner[i] === otherUserId;
+        {/* Top Icon for specials */}
+        {sq.kind === "chance" && <HelpCircle className="w-4 h-4 text-[#eab308] mt-1 drop-shadow-sm" />}
+        {sq.kind === "tax" && <Coins className="w-4 h-4 text-[#ef4444] mt-1 drop-shadow-sm" />}
+        {sq.kind === "utility" && sq.type === "water" && <Droplets className="w-4 h-4 text-[#3b82f6] mt-1 drop-shadow-sm" />}
+        {sq.kind === "utility" && sq.type === "electric" && <Zap className="w-4 h-4 text-[#eab308] mt-1 drop-shadow-sm" />}
+        {sq.kind === "jail" && <Siren className="w-4 h-4 text-[#ef4444] mt-1 drop-shadow-sm" />}
+        {sq.kind === "gotojail" && <Gavel className="w-4 h-4 text-[#ef4444] mt-1 drop-shadow-sm" />}
+        {sq.kind === "parking" && <MapPin className="w-4 h-4 text-[#3b82f6] mt-1 drop-shadow-sm" />}
 
-            return (
-              <div 
-                key={i} 
-                className={`relative flex flex-col items-center justify-center rounded-[4px] border border-white/10 bg-black/40 overflow-hidden text-center leading-none ${isOwnedByMe ? "ring-1 ring-[#0095f6]" : isOwnedByOther ? "ring-1 ring-[#ed4956]" : ""}`}
-                style={getGridArea(i)}
-              >
-                {square.kind === "property" && (
-                  <div className={`absolute top-0 left-0 right-0 h-1.5 ${getColorClass(square.color)}`} />
-                )}
-                
-                <div className={`mt-1 text-[7px] sm:text-[8px] font-bold text-white px-0.5 line-clamp-2 ${square.kind === "property" ? "pt-0.5" : ""}`}>
-                  {square.kind === "chance" ? "❓ حظ" : square.kind === "go" ? "🚀 البداية" : square.kind === "tax" ? "💰 ضريبة" : square.name}
-                </div>
-                {square.kind === "property" && (
-                  <div className="text-[7px] text-[#00d26a] font-semibold mt-0.5">${square.price}</div>
-                )}
+        {/* Houses */}
+        {state.houses[i] > 0 && (
+          <div className="absolute top-0.5 w-full flex justify-center gap-[1px]">
+            {Array.from({ length: state.houses[i] }).map((_, idx) => (
+              <span key={idx} className="text-[7px] drop-shadow-md">{idx === 3 ? "🏨" : "🏠"}</span>
+            ))}
+          </div>
+        )}
 
-                {/* Tokens */}
-                <div className="absolute bottom-0.5 w-full flex items-center justify-center gap-0.5 text-[10px] sm:text-[12px] z-10">
-                  {hasMe && <span>{state.tokens[me] ?? "🚗"}</span>}
-                  {hasOther && <span>{state.tokens[otherUserId] ?? "🚕"}</span>}
-                </div>
-              </div>
-            );
-          })}
+        <div className={`text-[6px] sm:text-[7px] font-bold text-gray-800 text-center leading-[1.1] w-full px-0.5 line-clamp-2 ${sq.kind !== "property" ? "mt-auto" : ""}`}>
+          {sq.name}
+        </div>
 
-          {/* Center Area */}
-          <div className="bg-[#1a1a1a] rounded-xl border border-white/10 flex flex-col items-center justify-center p-2 text-center" style={{ gridColumn: "2 / 6", gridRow: "2 / 6" }} dir="rtl">
-            <h3 className="text-[15px] font-bold text-white mb-2 tracking-wide">🏦 بنك الحظ</h3>
+        {/* Bottom Price */}
+        {(sq.kind === "property" || sq.kind === "utility") && (
+          <div className="text-[6px] font-bold text-gray-600 w-full text-center pb-[2px]">${sq.price}</div>
+        )}
+        {(sq.kind === "tax") && (
+          <div className="text-[6px] font-bold text-[#ef4444] w-full text-center pb-[2px]">-${sq.amount}</div>
+        )}
+        {(sq.kind === "go") && (
+          <div className="text-[6px] font-bold text-[#22c55e] w-full text-center pb-[2px] mb-1">مرتب $200</div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0f0f0f] overflow-hidden w-[310px] sm:w-[350px] shadow-2xl font-sans">
+      <div className="p-2 aspect-square relative bg-[#2a3026]">
+        
+        {/* Realistic Board Background */}
+        <div className="absolute inset-2 bg-[#d1e5d7] rounded-sm shadow-inner ring-1 ring-black/20" dir="ltr">
+          {BOARD.map((sq, i) => renderSquare(sq, i))}
+
+          {/* Tokens (Absolute Floating Overlay) */}
+          <div 
+            className="absolute z-50 flex items-center justify-center w-[14.28%] h-[14.28%] pointer-events-none transition-all duration-[600ms] ease-out drop-shadow-2xl"
+            style={{ ...getCellPos(mePos), transform: "translate(0, 0)" }}
+          >
+            <div className="text-[20px] sm:text-[24px] filter drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] -mt-2 animate-pulse">{state.tokens[me] ?? "🚗"}</div>
+          </div>
+          
+          {state.joined && (
+            <div 
+              className="absolute z-40 flex items-center justify-center w-[14.28%] h-[14.28%] pointer-events-none transition-all duration-[600ms] ease-out drop-shadow-2xl"
+              style={{ ...getCellPos(otherPos), transform: "translate(6px, -6px)" }}
+            >
+              <div className="text-[18px] sm:text-[20px] filter drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] -mb-2">{state.tokens[otherUserId] ?? "🚕"}</div>
+            </div>
+          )}
+
+          {/* Center Area (Realistic style) */}
+          <div className="absolute top-[14.28%] left-[14.28%] w-[71.42%] h-[71.42%] flex flex-col items-center justify-center p-3 text-center pointer-events-none" dir="rtl">
             
-            <div className="flex w-full justify-between gap-2 text-[11px] mb-3">
-              <div className={`flex-1 rounded-lg border ${myTurn ? "border-[#0095f6] bg-[#0095f6]/10" : "border-white/10 bg-black/40"} p-1.5`}>
-                <div className="text-[#a8a8a8] mb-0.5">إنت {state.tokens[me] ?? "🚗"}</div>
-                <div className="text-[#00d26a] font-bold">${meCash}</div>
-              </div>
-              <div className={`flex-1 rounded-lg border ${!myTurn ? "border-[#ed4956] bg-[#ed4956]/10" : "border-white/10 bg-black/40"} p-1.5`}>
-                <div className="text-[#a8a8a8] mb-0.5">هو {state.tokens[otherUserId] ?? "🚕"}</div>
-                <div className="text-[#00d26a] font-bold">${otherCash}</div>
-              </div>
+            {/* Center Logo/Branding */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center opacity-10 rotate-[-45deg] select-none pointer-events-none">
+              <Building2 className="w-32 h-32 text-green-900" />
+              <div className="text-4xl font-black text-green-900 uppercase mt-2">بنك الحظ</div>
             </div>
 
-            {state.last && (
-              <div className="text-[10px] sm:text-[11px] text-white/80 bg-white/5 rounded-lg px-2 py-1.5 mb-3 w-full text-center">
-                {state.last.text}
+            <div className="z-10 w-full h-full flex flex-col items-center justify-between pointer-events-auto relative">
+              
+              <div className="bg-gradient-to-br from-[#00d26a] to-[#00a854] px-4 py-1.5 rounded-full shadow-lg border border-white/20 mb-1">
+                <h3 className="text-[12px] sm:text-[14px] font-black text-white tracking-widest uppercase drop-shadow-md">بنك الحظ المصرى</h3>
               </div>
-            )}
 
+              {/* Dice Container */}
+              <div className="flex gap-3 my-auto scale-90 sm:scale-100">
+                <DiceFace value={displayDice[0]} rolling={isRolling} />
+                <DiceFace value={displayDice[1]} rolling={isRolling} />
+              </div>
+
+              {/* Event Log Plaque */}
+              <div className="w-full bg-white/90 backdrop-blur-sm rounded-lg border border-black/10 shadow-md p-1.5 min-h-[36px] flex items-center justify-center mt-2 mb-2">
+                {state.last ? (
+                  <div className="flex items-center gap-1.5 text-[11px] sm:text-[12px] font-bold text-gray-800">
+                    <span className="text-[14px]">{state.last.icon}</span>
+                    <span className="leading-tight">{state.last.text}</span>
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-gray-500 font-medium">في انتظار الرمية الأولى...</div>
+                )}
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Modern Controls Panel below the board */}
+      <div className="bg-[#1a1a1a] p-3 border-t border-white/10" dir="rtl">
+        {/* Scoreboard */}
+        {state.bankrupt[state.p1] || state.bankrupt[state.p2] ? (
+          <div className="text-[#00d26a] font-black text-center text-[15px] py-2 bg-[#00d26a]/10 rounded-lg animate-pulse border border-[#00d26a]/30">
+            🏆 فاز {state.bankrupt[state.p1] ? state.tokens[state.p2] : state.tokens[state.p1]}! (تم الإفلاس)
+          </div>
+        ) : (
+          <div className="flex justify-between gap-2 mb-3">
+            <div className={`flex-1 flex flex-col items-center rounded-xl p-1.5 border-2 transition-all ${myTurn ? "border-[#0095f6] bg-[#0095f6]/10 shadow-[0_0_12px_rgba(0,149,246,0.25)] scale-105" : "border-white/5 bg-black/40"}`}>
+              <div className="text-[11px] text-[#a8a8a8] font-medium flex items-center gap-1">أنت {state.tokens[me]}</div>
+              <div className="text-[14px] text-[#00d26a] font-black tracking-wide">${meCash}</div>
+            </div>
+            <div className={`flex-1 flex flex-col items-center rounded-xl p-1.5 border-2 transition-all ${!myTurn && state.joined ? "border-[#ed4956] bg-[#ed4956]/10 shadow-[0_0_12px_rgba(237,73,86,0.25)] scale-105" : "border-white/5 bg-black/40"}`}>
+              <div className="text-[11px] text-[#a8a8a8] font-medium flex items-center gap-1">الخصم {state.tokens[otherUserId] ?? "🚕"}</div>
+              <div className="text-[14px] text-[#00d26a] font-black tracking-wide">${otherCash}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Buttons */}
+        {!(state.bankrupt[state.p1] || state.bankrupt[state.p2]) && (
+          <div>
             {!state.joined ? (
-              <button onClick={join} className="w-full rounded-lg bg-[#0095f6] py-2 text-[12px] font-bold text-white active:scale-95 transition-transform">
-                انضم للعب 🚗
+              <button onClick={join} className="w-full rounded-xl bg-gradient-to-r from-[#0095f6] to-[#0077c9] py-3 text-[14px] font-black text-white active:scale-[0.98] transition-all shadow-lg hover:shadow-[#0095f6]/40">
+                بدء اللعب {state.tokens[state.p1] === "🚗" ? "🚕" : "🚗"}
               </button>
             ) : (
-              <div className="flex items-center gap-2 w-full">
-                <button
-                  onClick={roll}
-                  disabled={!myTurn}
-                  className={`flex-1 rounded-lg py-2 text-[12px] font-bold transition-all ${myTurn ? "bg-[#00d26a] text-black active:scale-95 shadow-[0_0_10px_rgba(0,210,106,0.2)]" : "bg-white/5 text-[#555]"}`}
-                >
-                  🎲 إرمي
-                </button>
-                <button
-                  onClick={buy}
-                  disabled={!canBuy}
-                  className={`flex-1 rounded-lg py-2 text-[12px] font-bold transition-all ${canBuy ? "bg-[#3797f0] text-white active:scale-95 shadow-[0_0_10px_rgba(55,151,240,0.2)]" : "bg-white/5 text-[#555]"}`}
-                >
-                  🏠 إشتري
-                </button>
+              <div className="flex flex-col gap-2 w-full">
+                <div className="flex items-stretch gap-2 w-full h-[42px]">
+                  <button
+                    onClick={roll}
+                    disabled={!myTurn || isRolling}
+                    className={`flex-[2] flex items-center justify-center gap-1.5 rounded-xl text-[13px] font-black transition-all overflow-hidden ${myTurn ? "bg-gradient-to-r from-[#00d26a] to-[#00a854] text-white active:scale-[0.98] shadow-lg shadow-[#00d26a]/30 hover:brightness-110" : "bg-white/5 text-[#555] cursor-not-allowed"}`}
+                  >
+                    🎲 رمي النرد
+                  </button>
+                  {canBuy && (
+                    <button
+                      onClick={buy}
+                      className="flex-1 rounded-xl text-[13px] font-black transition-all bg-gradient-to-r from-[#0095f6] to-[#0077c9] text-white active:scale-[0.98] shadow-lg shadow-[#0095f6]/30 hover:brightness-110"
+                    >
+                      🏠 شراء
+                    </button>
+                  )}
+                </div>
+                
+                {(canUpgrade || canSell) && (
+                  <div className="flex items-stretch gap-2 w-full h-[36px]">
+                    {canUpgrade && (
+                      <button
+                        onClick={upgrade}
+                        className="flex-1 rounded-lg text-[12px] font-bold transition-all bg-gradient-to-r from-[#eab308] to-[#ca8a04] text-white shadow-md active:scale-[0.98] hover:brightness-110"
+                      >
+                        🏗️ بناء ({Math.floor(sq.price / 2)}$)
+                      </button>
+                    )}
+                    {canSell && (
+                      <button
+                        onClick={sell}
+                        className="flex-1 rounded-lg text-[12px] font-bold transition-all bg-[#262626] text-[#fafafa] active:scale-[0.98] hover:bg-[#333] border border-white/10"
+                      >
+                        🏦 بيع
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
 }
-

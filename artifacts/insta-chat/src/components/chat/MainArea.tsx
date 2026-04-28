@@ -1,11 +1,61 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useChatStore } from "@/lib/store";
-import { ChevronRight, Phone, Video, Info, MessageCircle } from "lucide-react";
+import { ChevronRight, Phone, Video, Info, MessageCircle, Mic } from "lucide-react";
 import { useLocation } from "wouter";
 import { Thread } from "./Thread";
 import { Composer } from "./Composer";
 import { EmojiStylePicker } from "./EmojiStylePicker";
 import { InfoPanel } from "./InfoPanel";
+
+function CallOverlay({ type, user, onEnd }: { type: "audio" | "video"; user: any; onEnd: () => void }) {
+  const [dots, setDots] = useState("");
+  useEffect(() => {
+    const t = setInterval(() => setDots(d => d.length >= 3 ? "" : d + "."), 500);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div className="absolute inset-0 z-50 flex flex-col bg-[#111] overflow-hidden animate-in fade-in duration-300">
+      {type === "video" ? (
+        <div className="absolute inset-0 bg-gradient-to-b from-[#1877f2]/20 to-black opacity-60" />
+      ) : (
+        <div 
+          className="absolute inset-0 opacity-30 bg-cover bg-center blur-3xl scale-110"
+          style={{ backgroundImage: `url(${user.avatarUrl})` }}
+        />
+      )}
+      
+      <div className="absolute inset-0 flex flex-col items-center pt-24 z-10">
+        <div className="relative mb-6">
+          <img src={user.avatarUrl} className="w-32 h-32 rounded-full object-cover shadow-2xl z-10 relative" alt="" />
+          <div className="absolute inset-0 rounded-full bg-white/20 animate-ping" style={{ animationDuration: "2s" }} />
+          <div className="absolute inset-0 rounded-full bg-white/10 animate-ping" style={{ animationDuration: "2.5s", animationDelay: "0.5s" }} />
+        </div>
+        <h2 className="text-2xl font-bold text-white mb-2 tracking-wide drop-shadow-md">{user.displayName || user.username}</h2>
+        <p className="text-white/70 text-[15px] font-medium drop-shadow">
+          {type === "video" ? "مكالمة فيديو" : "مكالمة صوتية"}{dots}
+        </p>
+      </div>
+
+      <div className="absolute bottom-16 left-0 right-0 flex justify-center items-center gap-6 z-10">
+        <button className="w-14 h-14 rounded-full bg-white/15 backdrop-blur-md flex items-center justify-center hover:bg-white/25 transition-colors active:scale-95 shadow-lg">
+          <Mic className="w-6 h-6 text-white" />
+        </button>
+        {type === "video" && (
+          <button className="w-14 h-14 rounded-full bg-white/15 backdrop-blur-md flex items-center justify-center hover:bg-white/25 transition-colors active:scale-95 shadow-lg">
+            <Video className="w-6 h-6 text-white" />
+          </button>
+        )}
+        <button 
+          onClick={onEnd}
+          className="w-16 h-16 rounded-full bg-[#ed4956] flex items-center justify-center hover:bg-[#ed4956]/80 transition-colors active:scale-95 shadow-lg shadow-[#ed4956]/20"
+        >
+          <Phone className="w-7 h-7 text-white transform rotate-[135deg]" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function MainArea({ activeId }: { activeId: string | null }) {
   const [, setLocation] = useLocation();
@@ -13,6 +63,7 @@ export function MainArea({ activeId }: { activeId: string | null }) {
   const activeConv = activeId ? conversations[activeId] : null;
   const otherUser = activeConv?.participants[0];
   const [showInfo, setShowInfo] = useState(false);
+  const [calling, setCalling] = useState<"audio" | "video" | null>(null);
 
   /* ── Empty state ─────────────────────────────────────────────── */
   if (!activeId || !activeConv) {
@@ -49,6 +100,11 @@ export function MainArea({ activeId }: { activeId: string | null }) {
   return (
     <div className="flex-1 flex flex-col bg-[#000] relative h-full overflow-hidden">
 
+      {/* Call Overlay */}
+      {calling && otherUser && (
+        <CallOverlay type={calling} user={otherUser} onEnd={() => setCalling(null)} />
+      )}
+
       {/* Info Panel */}
       {showInfo && otherUser && (
         <InfoPanel
@@ -71,7 +127,7 @@ export function MainArea({ activeId }: { activeId: string | null }) {
 
           {/* Avatar + name — clickable to open InfoPanel */}
           <button
-            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity text-right"
             onClick={() => setShowInfo(true)}
           >
             <div className="relative">
@@ -88,7 +144,7 @@ export function MainArea({ activeId }: { activeId: string | null }) {
               <div className="font-semibold text-[15px] text-white leading-tight">
                 {otherUser?.displayName || otherUser?.username}
               </div>
-              <div className="text-[12px] text-[#555] flex items-center gap-1.5">
+              <div className="text-[12px] text-[#555] flex items-center justify-end gap-1.5 mt-0.5">
                 {otherUser?.isOnline ? (
                   <><span className="w-1.5 h-1.5 rounded-full bg-[#00d26a] inline-block" />نشط الآن</>
                 ) : "نشط منذ 5 دقائق"}
@@ -99,19 +155,23 @@ export function MainArea({ activeId }: { activeId: string | null }) {
 
         {/* Header actions */}
         <div className="flex items-center gap-1 text-white">
-          {([
-            { Icon: Phone, label: "مكالمة صوتية" },
-            { Icon: Video, label: "مكالمة فيديو" },
-          ] as const).map(({ Icon, label }) => (
-            <button
-              key={label}
-              aria-label={label}
-              title={label}
-              className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
-            >
-              <Icon className="w-5 h-5 stroke-[1.5]" />
-            </button>
-          ))}
+          <button
+            aria-label="مكالمة صوتية"
+            title="مكالمة صوتية"
+            onClick={() => setCalling("audio")}
+            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
+          >
+            <Phone className="w-5 h-5 stroke-[1.5]" />
+          </button>
+          <button
+            aria-label="مكالمة فيديو"
+            title="مكالمة فيديو"
+            onClick={() => setCalling("video")}
+            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
+          >
+            <Video className="w-5 h-5 stroke-[1.5]" />
+          </button>
+          
           <EmojiStylePicker align="left" />
           <button
             aria-label="معلومات"

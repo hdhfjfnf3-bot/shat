@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, useMemo } from "react";
 import { Copy, CornerUpLeft, Trash2, Smile } from "lucide-react";
 import { Message, CURRENT_USER, User } from "@/lib/types";
 import { useChatStore } from "@/lib/store";
@@ -13,6 +13,7 @@ import { CardsInlineGame } from "./CardsInlineGame";
 import { DominoesInlineGame } from "./DominoesInlineGame";
 import { Connect4InlineGame } from "./Connect4InlineGame";
 import { DotsBoxesInlineGame } from "./DotsBoxesInlineGame";
+import emojiRegex from "emoji-regex";
 
 const QUICK_REACTIONS = ["❤️", "😂", "😮", "😢", "😡", "👍"];
 
@@ -134,6 +135,14 @@ export const MessageBubble = memo(function MessageBubble({
   const animClass = isNew ? "animate-messageIn" : "";
   const originStyle = { transformOrigin: isOwn ? "bottom right" : "bottom left" };
 
+  const isOnlyEmoji = useMemo(() => {
+    if (msg.type !== "text" || msg.isUnsent) return false;
+    const stripped = msg.content.replace(emojiRegex(), "").trim();
+    if (stripped.length > 0) return false;
+    const count = (msg.content.match(emojiRegex()) || []).length;
+    return count > 0 && count <= 3;
+  }, [msg]);
+
   /* ── Unsent ─────────────────────────────────────────────────── */
   if (msg.isUnsent) {
     return (
@@ -242,17 +251,17 @@ export const MessageBubble = memo(function MessageBubble({
             onClick={handleTap}
             onContextMenu={(e) => { e.preventDefault(); setShowActions(true); setShowMenu(true); }}
             className={`relative select-none cursor-pointer ig-pop ${
-              msg.type === "like" ? "text-[44px] animate-heartBeat -my-2" :
+              msg.type === "like" || isOnlyEmoji ? "text-[44px] animate-heartBeat -my-2" :
               msg.type === "image" || msg.type === "video" ? "p-0 overflow-hidden border border-white/10" :
               msg.type === "voice" ? "px-3 py-2 text-[14px]" :
               msg.type === "game" ? "p-0 overflow-hidden border border-white/10 bg-[#1a1a1a]" :
               "px-[14px] py-[8px] text-[14px]"
             } leading-[1.3] break-words ${
-              msg.type === "like" ? "" :
+              msg.type === "like" || isOnlyEmoji ? "" :
               msg.type === "image" || msg.type === "video" ? "bg-[#1a1a1a]" :
               isOwn ? `${themeClass} text-white shadow-sm` : "bg-[#1a1a1a] border border-white/[0.04] text-[#fafafa]"
             }`}
-            style={{ borderRadius: msg.type === "like" ? "0" : borderRadius }}
+            style={{ borderRadius: (msg.type === "like" || isOnlyEmoji) ? "0" : borderRadius }}
             dir="auto"
           >
             {msg.type === "voice" && msg.voice ? (

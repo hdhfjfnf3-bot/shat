@@ -20,9 +20,9 @@ export function InfoPanel({ user, conversationId, onClose }: Props) {
 
   const conv = conversations[conversationId];
   const isMuted = conv?.isMuted || false;
-  
+
   const vanishModeOn = useChatStore((s) => s.vanishMode[conversationId] || false);
-  
+
   const allMessages = useChatStore((s) => s.messages[conversationId] || []);
   const currentThemeMsg = [...allMessages].reverse().find(m => m.type === "theme");
   const currentTheme = currentThemeMsg?.content || "default";
@@ -130,7 +130,7 @@ export function InfoPanel({ user, conversationId, onClose }: Props) {
             <div className="text-[11px] uppercase tracking-widest text-[#444] font-semibold px-2 mb-2 text-right border-t border-white/5 pt-4">
               إعدادات الخصوصية
             </div>
-            
+
             <button
               onClick={() => {
                 const next = !vanishModeOn;
@@ -158,19 +158,19 @@ export function InfoPanel({ user, conversationId, onClose }: Props) {
             <div className="text-[11px] uppercase tracking-widest text-[#444] font-semibold px-2 mb-2 text-right border-t border-white/5 pt-4">
               خيارات الدردشة
             </div>
-            <ActionRow 
-              icon={<BellOff className="w-4 h-4" />} 
-              label={isMuted ? "إلغاء كتم الإشعارات" : "كتم الإشعارات"} 
-              onClick={() => toggleMute(conversationId)} 
+            <ActionRow
+              icon={<BellOff className="w-4 h-4" />}
+              label={isMuted ? "إلغاء كتم الإشعارات" : "كتم الإشعارات"}
+              onClick={() => toggleMute(conversationId)}
             />
             <ActionRow icon={<UserX className="w-4 h-4" />} label="حظر" destructive />
-            
+
             {!confirmDelete ? (
-              <ActionRow 
-                icon={<Trash2 className="w-4 h-4" />} 
-                label="حذف المحادثة" 
-                destructive 
-                onClick={() => setConfirmDelete(true)} 
+              <ActionRow
+                icon={<Trash2 className="w-4 h-4" />}
+                label="حذف المحادثة"
+                destructive
+                onClick={() => setConfirmDelete(true)}
               />
             ) : (
               <div className="mx-2 p-3 rounded-xl bg-[#ed4956]/10 border border-[#ed4956]/25 mt-2 mb-2" style={{ animation: "fadeUp 0.15s ease-out" }}>

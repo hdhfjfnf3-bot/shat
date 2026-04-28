@@ -1,55 +1,31 @@
 import { useMemo } from "react";
-
 import { Message } from "@/lib/types";
 import { useMe } from "@/lib/me";
 import { useChatStore } from "@/lib/store";
+import { Coins, Swords } from "lucide-react";
 
-type CardsStartPayload = {
-  kind: "cards_start";
-  gameId: string;
-  createdBy: string;
-  createdAt: string;
-  mode: "war" | "high_card";
-};
-
-type CardsDrawPayload = {
-  kind: "cards_draw";
-  gameId: string;
-  by: string;
-  at: string;
-};
-
-type Payload = CardsStartPayload | CardsDrawPayload;
+type CardsStartPayload = { kind: "cards_start"; gameId: string; createdBy: string; createdAt: string; mode: "war" | "high_card"; };
+type CardsDrawPayload = { kind: "cards_draw"; gameId: string; by: string; at: string; };
 
 type Suit = "S" | "H" | "D" | "C";
-type Rank = 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14; // J=11 Q=12 K=13 A=14
+type Rank = 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
 type Card = { suit: Suit; rank: Rank };
 
 function safeJsonParse<T>(s: string): T | null {
-  try {
-    return JSON.parse(s) as T;
-  } catch {
-    return null;
-  }
+  try { return JSON.parse(s) as T; } catch { return null; }
 }
 
 function xorshift32(seed: number): () => number {
   let x = seed | 0;
   return () => {
-    x ^= x << 13;
-    x ^= x >>> 17;
-    x ^= x << 5;
-    // convert to [0,1)
+    x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
     return ((x >>> 0) % 1_000_000) / 1_000_000;
   };
 }
 
 function hashSeed(s: string): number {
   let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return h >>> 0;
 }
 
@@ -82,14 +58,10 @@ function rankLabel(r: Rank): string {
 }
 
 function suitEmoji(s: Suit): string {
-  if (s === "S") return "♠️";
-  if (s === "H") return "♥️";
-  if (s === "D") return "♦️";
-  return "♣️";
-}
-
-function cardText(c: Card): string {
-  return `${rankLabel(c.rank)}${suitEmoji(c.suit)}`;
+  if (s === "S") return "♠";
+  if (s === "H") return "♥";
+  if (s === "D") return "♦";
+  return "♣";
 }
 
 function cmpCard(a: Card, b: Card): -1 | 0 | 1 {
@@ -109,17 +81,7 @@ function pickLastDraw(messages: Message[], gameId: string, by: string): number {
   return n;
 }
 
-export function CardsInlineGame({
-  gameMessage,
-  otherUserId,
-  conversationId,
-  allMessages,
-}: {
-  gameMessage: Message;
-  otherUserId: string;
-  conversationId: string;
-  allMessages: Message[];
-}) {
+export function CardsInlineGame({ gameMessage, otherUserId, conversationId, allMessages }: { gameMessage: Message; otherUserId: string; conversationId: string; allMessages: Message[] }) {
   const me = useMe((s) => s.username).toLowerCase();
   const { sendMessage } = useChatStore();
 
@@ -129,138 +91,144 @@ export function CardsInlineGame({
   const deck = useMemo(() => (gameId ? shuffle(makeDeck(), `cards:${gameId}`) : []), [gameId]);
 
   const myDrawCount = useMemo(() => (gameId ? pickLastDraw(allMessages, gameId, me) : 0), [allMessages, gameId, me]);
-  const theirDrawCount = useMemo(
-    () => (gameId ? pickLastDraw(allMessages, gameId, otherUserId) : 0),
-    [allMessages, gameId, otherUserId],
-  );
+  const theirDrawCount = useMemo(() => (gameId ? pickLastDraw(allMessages, gameId, otherUserId) : 0), [allMessages, gameId, otherUserId]);
 
   const myCard = deck[myDrawCount - 1] ?? null;
   const theirCard = deck[theirDrawCount - 1] ?? null;
 
   const status = useMemo(() => {
-    if (!start || !gameId) return { title: "كوتشينة", sub: "فيه مشكلة في بيانات اللعبة." };
+    if (!start || !gameId) return { title: "كوتشينة", sub: "خطأ في بيانات اللعبة." };
     if (start.mode === "high_card") {
-      if (!myCard && !theirCard) return { title: "أعلى ورقة", sub: "اسحبوا ورقة… الأعلى يكسب." };
-      if (myCard && !theirCard) return { title: "أعلى ورقة", sub: "تمام… مستني الطرف التاني يسحب." };
-      if (!myCard && theirCard) return { title: "أعلى ورقة", sub: "الطرف التاني سحب… دورك." };
+      if (!myCard && !theirCard) return { title: "أعلى ورقة", sub: "اسحبوا ورقة... الأعلى يكسب." };
+      if (myCard && !theirCard) return { title: "أعلى ورقة", sub: "ممتاز... في انتظار الطرف التاني." };
+      if (!myCard && theirCard) return { title: "أعلى ورقة", sub: "الطرف التاني سحب... دورك." };
       const c = cmpCard(myCard!, theirCard!);
-      if (c === 0) return { title: "تعادل", sub: `${cardText(myCard!)} = ${cardText(theirCard!)}` };
-      if (c === 1) return { title: "أنت كسبت", sub: `${cardText(myCard!)} أعلى من ${cardText(theirCard!)}` };
-      return { title: "الطرف التاني كسب", sub: `${cardText(theirCard!)} أعلى من ${cardText(myCard!)}` };
+      if (c === 0) return { title: "تعادل!", sub: "لا يوجد فائز" };
+      if (c === 1) return { title: "أنت كسبت! 🎉", sub: `ورقتك أعلى` };
+      return { title: "الخصم كسب", sub: `ورقته أعلى` };
     }
 
-    // war mode: points per round; each player draw increments a personal index → we compare latest round only when both have drawn that round
     const rounds = Math.min(myDrawCount, theirDrawCount);
-    let myPts = 0;
-    let theirPts = 0;
+    let myPts = 0; let theirPts = 0;
     for (let i = 0; i < rounds; i++) {
-      const a = deck[i]!;
-      const b = deck[i + 26] ?? deck[i]!;
+      const a = deck[i]!; const b = deck[i + 26] ?? deck[i]!;
       const c = cmpCard(a, b);
-      if (c === 1) myPts++;
-      else if (c === -1) theirPts++;
+      if (c === 1) myPts++; else if (c === -1) theirPts++;
     }
-    const needs = myDrawCount === theirDrawCount ? "اسحبوا الجولة الجاية." : myDrawCount < theirDrawCount ? "دورك تسحب." : "مستني الطرف التاني.";
-    return { title: `حرب (نقط)`, sub: `${myPts} - ${theirPts} • ${needs}` };
-  }, [deck, gameId, myCard, myDrawCount, otherUserId, start, theirCard, theirDrawCount]);
+    const needs = myDrawCount === theirDrawCount ? "اسحبوا للجولة التالية." : myDrawCount < theirDrawCount ? "دورك تسحب." : "في انتظار الطرف التاني.";
+    return { title: `حرب (نقط)`, sub: `${needs}`, myPts, theirPts };
+  }, [deck, gameId, myCard, myDrawCount, start, theirCard, theirDrawCount]);
 
-  if (!start || !gameId) {
-    return (
-      <div className="rounded-2xl border border-white/10 bg-[#141414] p-3 text-[13px] text-[#a8a8a8]">
-        رسالة كوتشينة غير صالحة.
-      </div>
-    );
-  }
+  if (!start || !gameId) return <div className="rounded-2xl border border-white/10 bg-[#141414] p-3 text-[13px] text-[#a8a8a8]">رسالة كوتشينة غير صالحة.</div>;
 
-  const canDraw =
-    start.mode === "high_card"
-      ? myDrawCount === 0
-      : myDrawCount <= theirDrawCount; // allow catch-up
+  const canDraw = start.mode === "high_card" ? myDrawCount === 0 : myDrawCount <= theirDrawCount;
 
   const draw = () => {
     if (!canDraw) return;
-    const payload: CardsDrawPayload = { kind: "cards_draw", gameId, by: me, at: new Date().toISOString() };
-    sendMessage(conversationId, JSON.stringify(payload), "game");
+    sendMessage(conversationId, JSON.stringify({ kind: "cards_draw", gameId, by: me, at: new Date().toISOString() }), "game");
   };
 
   const renderCard = (card: Card | null, isHidden: boolean = false) => {
     if (!card) {
       return (
-        <div className="w-16 h-24 sm:w-20 sm:h-28 rounded-lg border-2 border-white/10 bg-black/20 flex flex-col items-center justify-center text-white/20 font-bold text-xs shadow-inner">
-          مكان الورقة
+        <div className="w-[72px] h-[104px] sm:w-[88px] sm:h-[128px] rounded-xl border-2 border-dashed border-white/20 bg-black/10 flex flex-col items-center justify-center text-white/30 font-bold text-[11px] shadow-inner">
+          <span className="opacity-50">فارغ</span>
         </div>
       );
     }
     if (isHidden) {
       return (
-        <div className="w-16 h-24 sm:w-20 sm:h-28 rounded-lg border border-black/50 bg-[#8b0000] shadow-md flex items-center justify-center bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')]">
-          <div className="w-12 h-20 sm:w-16 sm:h-24 border border-white/20 rounded-md"></div>
+        <div className="w-[72px] h-[104px] sm:w-[88px] sm:h-[128px] rounded-xl bg-white shadow-[0_4px_12px_rgba(0,0,0,0.6)] p-1.5 flex items-center justify-center animate-pulse">
+          <div className="w-full h-full rounded-md bg-[#8b0000] border-2 border-white/20 flex items-center justify-center overflow-hidden relative">
+            <div className="absolute inset-0 opacity-40 bg-[url('https://www.transparenttextures.com/patterns/arabesque.png')]" />
+            <div className="w-8 h-12 border border-white/40 rounded-sm" />
+          </div>
         </div>
       );
     }
     
     const isRed = card.suit === "H" || card.suit === "D";
-    const colorClass = isRed ? "text-[#ed4956]" : "text-[#262626]";
+    const colorClass = isRed ? "text-[#d90000]" : "text-[#111111]";
     
     return (
-      <div className="w-16 h-24 sm:w-20 sm:h-28 rounded-lg bg-white shadow-[0_2px_10px_rgba(0,0,0,0.5)] flex flex-col justify-between p-1.5 sm:p-2 select-none relative animate-in fade-in zoom-in duration-300">
-        <div className={`text-left text-sm sm:text-base font-bold leading-none ${colorClass}`}>
+      <div className={`w-[72px] h-[104px] sm:w-[88px] sm:h-[128px] rounded-xl bg-gradient-to-br from-[#ffffff] to-[#f4f1ea] shadow-[0_4px_15px_rgba(0,0,0,0.5),inset_0_0_0_1px_rgba(0,0,0,0.05)] flex flex-col justify-between p-1.5 sm:p-2 select-none relative animate-in fade-in zoom-in duration-300 ${myDrawCount > 0 ? "slide-in-from-bottom-5" : ""}`}>
+        {/* Top Left */}
+        <div className={`text-left text-[14px] sm:text-[18px] font-black leading-none ${colorClass}`}>
           <div>{rankLabel(card.rank)}</div>
-          <div className="text-[10px] sm:text-[12px]">{suitEmoji(card.suit)}</div>
+          <div className="text-[10px] sm:text-[14px] -mt-1">{suitEmoji(card.suit)}</div>
         </div>
         
-        <div className={`absolute inset-0 flex items-center justify-center text-3xl sm:text-4xl opacity-20 ${colorClass}`}>
-          {suitEmoji(card.suit)}
+        {/* Center Large Suit */}
+        <div className={`absolute inset-0 flex flex-col items-center justify-center opacity-90 ${colorClass}`}>
+          <div className="text-4xl sm:text-5xl drop-shadow-sm">{suitEmoji(card.suit)}</div>
         </div>
 
-        <div className={`text-right text-sm sm:text-base font-bold leading-none rotate-180 ${colorClass}`}>
+        {/* Bottom Right */}
+        <div className={`text-right text-[14px] sm:text-[18px] font-black leading-none rotate-180 ${colorClass}`}>
           <div>{rankLabel(card.rank)}</div>
-          <div className="text-[10px] sm:text-[12px]">{suitEmoji(card.suit)}</div>
+          <div className="text-[10px] sm:text-[14px] -mt-1">{suitEmoji(card.suit)}</div>
         </div>
       </div>
     );
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0a2e1f] overflow-hidden w-[280px] sm:w-[340px] shadow-xl relative">
-      {/* Green Felt Texture Overlay */}
-      <div className="absolute inset-0 opacity-40 mix-blend-overlay pointer-events-none" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/felt.png')" }} />
+    <div className="rounded-2xl border border-white/10 bg-[#0f2414] overflow-hidden w-[300px] sm:w-[350px] shadow-2xl relative font-sans">
+      {/* Green Felt Texture */}
+      <div className="absolute inset-0 opacity-50 mix-blend-overlay pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/felt.png')]" />
       
-      <div className="p-4 relative z-10">
-        <div className="flex items-start justify-between gap-3 bg-black/40 rounded-xl p-3 backdrop-blur-sm border border-white/5">
-          <div className="min-w-0">
-            <div className="text-[14px] font-bold text-white tracking-wide">🃏 {status.title}</div>
-            <div className="text-[11px] text-[#a8a8a8] mt-0.5">{status.sub}</div>
+      {/* Top Banner */}
+      <div className="bg-gradient-to-r from-green-900 to-emerald-900 px-4 py-3 flex items-center justify-between border-b border-black/20 shadow-md relative z-10">
+        <div className="flex items-center gap-2">
+          {start.mode === "war" ? <Swords className="w-5 h-5 text-yellow-500" /> : <Coins className="w-5 h-5 text-yellow-500" />}
+          <div>
+            <div className="text-[14px] font-black text-white tracking-wide">{status.title}</div>
+            <div className="text-[11px] text-green-200 font-medium">{status.sub}</div>
           </div>
+        </div>
+        {start.mode === "war" && (
+          <div className="flex items-center gap-2 bg-black/30 px-2.5 py-1 rounded-lg border border-white/10">
+            <span className="text-blue-400 font-bold">{status.myPts ?? 0}</span>
+            <span className="text-white/50 text-[10px]">-</span>
+            <span className="text-red-400 font-bold">{status.theirPts ?? 0}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="p-4 sm:p-5 relative z-10">
+        {/* Draw Button Area */}
+        <div className="flex justify-center mb-6">
           <button
             type="button"
             onClick={draw}
             disabled={!canDraw}
-            className={`px-4 py-2 rounded-xl text-[13px] font-bold transition-all shadow-lg ${
+            className={`w-full max-w-[200px] py-2.5 rounded-xl text-[14px] font-black transition-all shadow-lg relative overflow-hidden ${
               canDraw
-                ? "bg-gradient-to-br from-[#f59e0b] to-[#d97706] text-white hover:scale-105 active:scale-95"
+                ? "bg-gradient-to-r from-yellow-500 to-amber-600 text-white hover:scale-105 active:scale-95 shadow-yellow-500/30"
                 : "bg-white/5 text-white/30 cursor-not-allowed border border-white/10"
             }`}
           >
-            اسحب ورقة
+            {canDraw ? "🃏 اسحب ورقة" : "في انتظار الخصم"}
+            {canDraw && <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />}
           </button>
         </div>
 
-        <div className="mt-6 flex justify-between items-center px-2">
-          {/* My Side */}
+        {/* Cards Area */}
+        <div className="flex justify-between items-center px-1 sm:px-3">
+          {/* My Card */}
           <div className="flex flex-col items-center gap-3">
-            <div className="bg-black/40 px-3 py-1 rounded-full text-[11px] text-white font-medium border border-white/10">
+            <div className="bg-black/40 px-4 py-1 rounded-full text-[11px] text-white font-bold border border-white/10 shadow-sm">
               أنت
             </div>
             {renderCard(myCard)}
           </div>
           
-          <div className="text-white/30 font-black italic text-2xl">VS</div>
+          <div className="text-white/20 font-black italic text-3xl drop-shadow-md pb-4">VS</div>
 
-          {/* Their Side */}
+          {/* Their Card */}
           <div className="flex flex-col items-center gap-3">
-            <div className="bg-black/40 px-3 py-1 rounded-full text-[11px] text-[#a8a8a8] border border-white/10">
-              الطرف التاني
+            <div className="bg-black/40 px-4 py-1 rounded-full text-[11px] text-[#a8a8a8] border border-white/10 shadow-sm">
+              الخصم
             </div>
             {renderCard(theirCard, start.mode === "high_card" && theirCard && !myCard)}
           </div>
@@ -269,4 +237,3 @@ export function CardsInlineGame({
     </div>
   );
 }
-

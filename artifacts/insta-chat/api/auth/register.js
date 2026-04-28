@@ -1,4 +1,3 @@
-import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { createClient } from "@supabase/supabase-js";
 
@@ -20,12 +19,29 @@ export default async function handler(req, res) {
   }
 
   const normalized = username.toLowerCase().replace(/^@/, "");
-  const { data: existing } = await supabase.from("users").select("username").eq("username", normalized).single();
+  const { data: existing, error: existingError } = await supabase
+    .from("users")
+    .select("username")
+    .eq("username", normalized)
+    .maybeSingle();
+  if (existingError) {
+    res.status(500).json({ error: "خطأ في التحقق من اسم المستخدم: " + existingError.message, details: existingError });
+    return;
+  }
   if (existing) { res.status(409).json({ error: "اسم المستخدم محجوز بالفعل." }); return; }
 
-  const passwordHash = await bcrypt.hash(password, 10);
-  const { error } = await supabase.from("users").insert({ username: normalized, password_hash: passwordHash });
-  if (error) { res.status(500).json({ error: "خطأ في إنشاء الحساب: " + error.message, details: error }); return; }
+  const { data: result, error } = await supabase.rpc("register_user", {
+    p_username: normalized,
+    p_password: password,
+  });
+  if (error) {
+    res.status(500).json({ error: "خطأ في إنشاء الحساب: " + error.message, details: error });
+    return;
+  }
+  if (result?.error) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
 
   const token = jwt.sign({ username: normalized }, JWT_SECRET, { expiresIn: "30d" });
   res.status(201).json({ user: { username: normalized }, token });

@@ -3,6 +3,10 @@
 -- Run this ONCE in Supabase SQL Editor
 -- ═══════════════════════════════════════════════
 
+-- ── 0. EXTENSIONS ───────────────────────────────
+-- pgcrypto: needed for password hashing (bcrypt via crypt/gen_salt)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- ── 1. TABLES ──────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS users (
@@ -71,13 +75,105 @@ DO $$ BEGIN
 END $$;
 
 -- ── 4. ROW LEVEL SECURITY (disable for now) ────
--- We rely on the service_role key in API routes for writes
--- and the anon key for reads (no sensitive data exposed)
 
-ALTER TABLE users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE rooms DISABLE ROW LEVEL SECURITY;
+ALTER TABLE users    DISABLE ROW LEVEL SECURITY;
+ALTER TABLE rooms    DISABLE ROW LEVEL SECURITY;
 ALTER TABLE messages DISABLE ROW LEVEL SECURITY;
 ALTER TABLE reactions DISABLE ROW LEVEL SECURITY;
 
+-- ── 5. AUTH RPC FUNCTIONS ───────────────────────
+-- All run as SECURITY DEFINER so the anon key can call them safely.
+-- The actual password_hash never leaves the DB.
+
+-- 5a. register_user(p_username, p_password)
+--     Returns: { "username": "..." }  on success
+--              { "error": "..." }     on failure
+CREATE OR REPLACE FUNCTION register_user(p_username TEXT, p_password TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_normalized TEXT;
+  v_hash       TEXT;
+BEGIN
+  v_normalized := lower(trim(regexp_replace(p_username, '^@', '')));
+
+  IF length(v_normalized) < 2 THEN
+    RETURN jsonb_build_object('error', 'اسم المستخدم قصير جداً.');
+  END IF;
+
+  IF v_normalized !~ '^[a-z0-9._]+$' THEN
+    RETURN jsonb_build_object('error', 'اسم المستخدم يجب أن يحتوي على حروف إنجليزية وأرقام فقط.');
+  END IF;
+
+  IF length(p_password) < 6 THEN
+    RETURN jsonb_build_object('error', 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.');
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM users WHERE username = v_normalized) THEN
+    RETURN jsonb_build_object('error', 'اسم المستخدم مستخدم بالفعل.');
+  END IF;
+
+  -- bcrypt hash with cost factor 10
+  v_hash := crypt(p_password, gen_salt('bf', 10));
+
+  INSERT INTO users (username, password_hash)
+  VALUES (v_normalized, v_hash);
+
+  RETURN jsonb_build_object('username', v_normalized);
+END;
+$$;
+
+-- 5b. login_user(p_username, p_password)
+--     Returns: { "username": "..." }  on success
+--              { "error": "..." }     on failure
+CREATE OR REPLACE FUNCTION login_user(p_username TEXT, p_password TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_normalized TEXT;
+  v_hash       TEXT;
+BEGIN
+  v_normalized := lower(trim(regexp_replace(p_username, '^@', '')));
+
+  SELECT password_hash INTO v_hash
+  FROM users
+  WHERE username = v_normalized;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('error', 'اسم المستخدم أو كلمة المرور غير صحيحة.');
+  END IF;
+
+  IF v_hash = crypt(p_password, v_hash) THEN
+    RETURN jsonb_build_object('username', v_normalized);
+  ELSE
+    RETURN jsonb_build_object('error', 'اسم المستخدم أو كلمة المرور غير صحيحة.');
+  END IF;
+END;
+$$;
+
+-- 5c. check_user_exists(p_username)
+--     Returns: { "exists": true/false, "username": "..." | null }
+CREATE OR REPLACE FUNCTION check_user_exists(p_username TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_normalized TEXT;
+  v_exists     BOOLEAN;
+BEGIN
+  v_normalized := lower(trim(regexp_replace(p_username, '^@', '')));
+  SELECT EXISTS(SELECT 1 FROM users WHERE username = v_normalized) INTO v_exists;
+  RETURN jsonb_build_object(
+    'exists',   v_exists,
+    'username', CASE WHEN v_exists THEN v_normalized ELSE NULL END
+  );
+END;
+$$;
+
 -- ── Done! ───────────────────────────────────────
-SELECT 'Database setup complete! All tables created.' AS status;
+SELECT 'Database setup complete! All tables and RPC functions created.' AS status;

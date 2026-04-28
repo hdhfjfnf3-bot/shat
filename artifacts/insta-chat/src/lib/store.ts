@@ -6,7 +6,7 @@ import { sounds } from "./sounds";
 type SendMeta = {
   id: string;
   content: string;
-  type: "text" | "image" | "video" | "voice" | "like";
+  type: "text" | "image" | "video" | "voice" | "like" | "game";
   replyToId?: string;
   voice?: VoiceMeta;
 };
@@ -17,6 +17,7 @@ type RealtimeAdapter = {
   unsendMessage?: (peer: string, messageId: string) => boolean;
   sendTyping?: (to: string, isTyping: boolean) => void;
   sendRead?: (to: string) => void;
+  deleteConversation?: (to: string) => void;
 };
 
 const realtime: RealtimeAdapter = {};
@@ -27,6 +28,7 @@ export function setRealtimeAdapter(a: RealtimeAdapter) {
   realtime.unsendMessage = a.unsendMessage;
   realtime.sendTyping = a.sendTyping;
   realtime.sendRead = a.sendRead;
+  realtime.deleteConversation = a.deleteConversation;
 }
 
 export function sendTypingSignal(to: string, isTyping: boolean) {
@@ -36,11 +38,13 @@ export function sendTypingSignal(to: string, isTyping: boolean) {
 interface ChatState {
   conversations: Record<string, Conversation>;
   messages: Record<string, Message[]>;
+  vanishMode: Record<string, boolean>;
   activeConversationId: string | null;
   replyingTo: Record<string, string | null>;
   typingPeers: Record<string, boolean>;
   setActiveConversation: (id: string | null) => void;
-  sendMessage: (conversationId: string, content: string, type?: "text" | "image" | "video" | "like" | "voice", replyToId?: string, voice?: VoiceMeta) => void;
+  setVanishMode: (conversationId: string, isOn: boolean) => void;
+  sendMessage: (conversationId: string, content: string, type?: "text" | "image" | "video" | "like" | "voice" | "game" | "theme" | "vanish_mode", replyToId?: string, voice?: VoiceMeta) => void;
   updateMessageStatus: (conversationId: string, messageId: string, status: MessageStatus) => void;
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => void;
   setReactions: (conversationId: string, messageId: string, reactions: { userId: string; emoji: string }[]) => void;
@@ -53,6 +57,8 @@ interface ChatState {
   ensureConversation: (peerUsername: string) => string;
   createConversation: (username: string) => string;
   setTyping: (peerUsername: string, isTyping: boolean) => void;
+  deleteConversation: (conversationId: string) => void;
+  toggleMute: (conversationId: string) => void;
   clearAll: () => void;
 }
 
@@ -77,9 +83,16 @@ export const useChatStore = create<ChatState>()(
     (set, get) => ({
       conversations: {},
       messages: {},
+      vanishMode: {},
       activeConversationId: null,
       replyingTo: {},
       typingPeers: {},
+
+      setVanishMode: (conversationId, isOn) => {
+        set((state) => ({
+          vanishMode: { ...state.vanishMode, [conversationId]: isOn },
+        }));
+      },
 
       setReplyingTo: (conversationId, messageId) => {
         set((state) => ({
@@ -134,6 +147,11 @@ export const useChatStore = create<ChatState>()(
         }
         const me = CURRENT_USER.username;
         const id = Math.random().toString(36).slice(2, 10);
+        
+        // If vanish mode is on, we don't save standard chat messages to DB! 
+        // We still put them in Zustand, but they are ephemeral.
+        const isVanishOn = get().vanishMode[conversationId] && type !== "vanish_mode" && type !== "theme";
+
         const newMessage: Message = {
           id,
           conversationId,
@@ -250,6 +268,29 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
+      deleteConversation: (conversationId) => {
+        set((state) => {
+          const { [conversationId]: _, ...restConvs } = state.conversations;
+          const { [conversationId]: __, ...restMsgs } = state.messages;
+          return { 
+            conversations: restConvs, 
+            messages: restMsgs, 
+            activeConversationId: state.activeConversationId === conversationId ? null : state.activeConversationId 
+          };
+        });
+        realtime.deleteConversation?.(conversationId);
+      },
+
+      toggleMute: (conversationId) => {
+        set((state) => {
+          const conv = state.conversations[conversationId];
+          if (!conv) return state;
+          return {
+            conversations: { ...state.conversations, [conversationId]: { ...conv, isMuted: !conv.isMuted } }
+          };
+        });
+      },
+
       markPeerRead: (peerUsername: string) => {
         const convId = peerUsername.toLowerCase();
         let changed = false;
@@ -271,11 +312,17 @@ export const useChatStore = create<ChatState>()(
       ingestRemoteMessage: (peerUsername, msg) => {
         const me = CURRENT_USER.username;
         const convId = get().ensureConversation(peerUsername);
+        const conv = get().conversations[convId];
+        const isMuted = conv?.isMuted || false;
         const isOwn = msg.senderId.toLowerCase() === me.toLowerCase();
-        // Only play sounds for NEW messages (not history loaded on startup)
         const isNew = new Date(msg.createdAt).getTime() > APP_START - 3000;
 
-        if (!isOwn && isNew) {
+        // Toggle vanish mode based on remote payload
+        if (msg.type === "vanish_mode") {
+          get().setVanishMode(convId, msg.content === "on");
+        }
+
+        if (!isOwn && isNew && !isMuted && msg.type !== "vanish_mode" && msg.type !== "theme") {
           const isVisible = get().activeConversationId === convId && !document.hidden;
           if (!isVisible) {
             // App is in background or different chat → notification sound + browser notification

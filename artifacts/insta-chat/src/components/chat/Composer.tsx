@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useChatStore, sendTypingSignal } from "@/lib/store";
-import { Smile, Mic, Image, Heart, X, CornerUpLeft, Trash2, Send } from "lucide-react";
+import { Smile, Mic, Image, Heart, X, CornerUpLeft, Trash2, Send, Dices } from "lucide-react";
 import EmojiPicker, { Theme } from "emoji-picker-react";
 import { useEmojiStyle, EMOJI_STYLE_TO_PICKER } from "@/lib/emojiStyle";
 import { EmojiText } from "./EmojiText";
@@ -18,6 +18,7 @@ export function Composer({ activeId }: { activeId: string }) {
   const [showPicker, setShowPicker] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const style = useEmojiStyle((s) => s.style);
 
@@ -238,10 +239,10 @@ export function Composer({ activeId }: { activeId: string }) {
           >
             <Trash2 className="w-4 h-4" />
           </button>
-          <div className="flex-1 flex items-center gap-2 overflow-hidden" dir="ltr">
+          <div className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden" dir="ltr">
             <div className="w-2 h-2 rounded-full bg-[#ed4956] animate-pulse shrink-0" />
-            <span className="text-[13px] tabular-nums text-white shrink-0">{formatDuration(elapsed)}</span>
-            <div className="flex items-end gap-[2px] h-6 flex-1 overflow-hidden">
+            <span className="text-[14px] tabular-nums text-white shrink-0">{formatDuration(elapsed)}</span>
+            <div className="flex items-end justify-end gap-[2px] h-6 flex-1 overflow-hidden">
               {liveBars.current.slice(-55).map((v, i) => (
                 <div key={i} style={{ width: 2, height: Math.max(3, Math.round(v * 24)), background: "linear-gradient(180deg,#d62976,#fa7e1e)", borderRadius: 1, flexShrink: 0 }} />
               ))}
@@ -257,7 +258,7 @@ export function Composer({ activeId }: { activeId: string }) {
         </div>
       ) : (
         /* Text bar */
-        <div className="flex items-end gap-2 rounded-[22px] px-2 py-[7px] bg-[#262626] transition-colors">
+        <div className="flex items-end gap-2 rounded-[24px] px-2 py-[7px] bg-[#1a1a1a] border border-white/[0.04] transition-colors relative">
           <button
             className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors text-white shrink-0 self-end mb-0.5"
             onClick={() => setShowPicker((s) => !s)}
@@ -266,23 +267,44 @@ export function Composer({ activeId }: { activeId: string }) {
             <Smile className="w-[22px] h-[22px] stroke-[1.5]" />
           </button>
 
-          <textarea
-            ref={taRef}
-            value={inputText}
-            onChange={(e) => handleTyping(e.target.value)}
-            placeholder="رسالة..."
-            className="bg-transparent flex-1 outline-none text-white placeholder:text-[#a8a8a8] resize-none text-[15px] leading-[22px] py-[7px] max-h-[120px]"
-            rows={1}
-            dir="auto"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
-              if (e.key === "Escape" && replyId) setReplyingTo(activeId, null);
-            }}
-          />
+          <div className="relative flex-1 min-w-0">
+            {/* Overlay for custom emoji rendering */}
+            <div 
+              ref={overlayRef}
+              className="absolute inset-0 pointer-events-none text-[16px] leading-[22px] py-[7px] overflow-hidden whitespace-pre-wrap break-words"
+              dir="auto"
+              aria-hidden="true"
+            >
+              {!inputText ? (
+                <span className="text-[#a8a8a8] pointer-events-none">رسالة...</span>
+              ) : (
+                <EmojiText text={inputText} size={18} disableJumbo />
+              )}
+            </div>
+
+            <textarea
+              ref={taRef}
+              value={inputText}
+              onChange={(e) => handleTyping(e.target.value)}
+              onScroll={(e) => {
+                if (overlayRef.current) overlayRef.current.scrollTop = e.currentTarget.scrollTop;
+              }}
+              className="w-full bg-transparent outline-none resize-none text-[16px] leading-[22px] py-[7px] max-h-[120px] block"
+              style={{ color: "transparent", caretColor: "white", textShadow: "0 0 0 transparent" }}
+              rows={1}
+              dir="auto"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+                if (e.key === "Escape" && replyId) setReplyingTo(activeId, null);
+              }}
+            />
+          </div>
 
           {showSend ? (
             <button
               onClick={handleSend}
+              onMouseDown={(e) => e.preventDefault()}
+              onTouchStart={(e) => e.preventDefault()}
               className="font-bold text-[#0095f6] hover:text-white transition-colors self-end mb-[10px] ml-2 text-[15px] shrink-0 active:scale-95 px-2"
             >
               إرسال
@@ -301,6 +323,21 @@ export function Composer({ activeId }: { activeId: string }) {
               </button>
               <button onClick={() => fileInputRef.current?.click()} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors text-white" aria-label="صورة أو فيديو">
                 <Image className="w-[22px] h-[22px] stroke-[1.5]" />
+              </button>
+              <button
+                onClick={() => {
+                  const payload = {
+                    kind: "hub",
+                    hubId: Math.random().toString(36).slice(2, 10),
+                    createdAt: new Date().toISOString(),
+                  } as const;
+                  sendMessage(activeId, JSON.stringify(payload), "game");
+                }}
+                className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors text-white"
+                aria-label="مركز الألعاب"
+                title="ألعاب"
+              >
+                <Dices className="w-[22px] h-[22px] stroke-[1.5]" />
               </button>
               <button
                 className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors text-white hover:text-[#ed4956] active:scale-90"

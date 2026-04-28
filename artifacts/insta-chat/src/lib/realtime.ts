@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useChatStore, setRealtimeAdapter } from "./store";
 import { useMe } from "./me";
-import { supabase, roomKey } from "./supabase";
+import { supabase, supabaseAdmin, roomKey } from "./supabase";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export function useRealtime() {
@@ -22,8 +22,8 @@ export function useRealtime() {
     async function init() {
       const store = useChatStore.getState();
 
-      // Listen for ANY room changes (INSERT or UPDATE from upsert) to ensure we catch new chats
-      const globalCh = supabase
+      // Listen for ANY room changes (INSERT or UPDATE from upsert)
+      const globalCh = supabaseAdmin
         .channel(`global:${me}`)
         .on("postgres_changes", { event: "*", schema: "public", table: "rooms" }, (p) => {
           const r = (p.new || p.old) as any;
@@ -34,8 +34,8 @@ export function useRealtime() {
         .subscribe();
       channelMap.current.set("__global__", globalCh);
 
-      // Load all existing rooms
-      const { data: rooms } = await supabase
+      // Load all existing rooms — use admin to bypass RLS
+      const { data: rooms } = await supabaseAdmin
         .from("rooms")
         .select("*")
         .or(`user_a.eq.${me},user_b.eq.${me}`);
@@ -60,8 +60,9 @@ export function useRealtime() {
       const store = useChatStore.getState();
       store.ensureConversation(peer);
 
-      // 1. Subscribe to real-time events for this room FIRST to avoid race conditions
-      const ch = supabase
+      // 1. Subscribe to real-time events FIRST to avoid race conditions
+      //    Use admin client for channels to bypass RLS filtering on postgres_changes
+      const ch = supabaseAdmin
         .channel(`room:${key}`, {
           config: { broadcast: { ack: false } },
         })
@@ -80,20 +81,26 @@ export function useRealtime() {
           const m = p.new as any;
           if (m.is_unsent) useChatStore.getState().markUnsent(peer, m.id);
         })
-        // Reactions
+        // Reactions — use admin to read reactions data
         .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, async (p) => {
           const row = (p.new ?? p.old) as any;
           if (!row?.message_id) return;
-          const { data } = await supabase.from("reactions").select("*").eq("message_id", row.message_id);
+          const { data } = await supabaseAdmin
+            .from("reactions")
+            .select("*")
+            .eq("message_id", row.message_id);
           if (data) useChatStore.getState().setReactions(peer, row.message_id, data.map((r) => ({ userId: r.user_id, emoji: r.emoji })));
         })
-        // Typing indicator
+        // Typing indicator (broadcast — no DB, no RLS issue)
         .on("broadcast", { event: "typing" }, (p) => {
           if (p.payload?.to === me) useChatStore.getState().setTyping(p.payload.from, p.payload.isTyping);
         })
-        // Read receipt
+        // Read receipt (broadcast — no DB, no RLS issue)
         .on("broadcast", { event: "read" }, (p) => {
           if (p.payload?.to === me) useChatStore.getState().markPeerRead(p.payload.from);
+        })
+        .on("broadcast", { event: "vanish_msg" }, (p) => {
+          useChatStore.getState().ingestRemoteMessage(peer, p.payload);
         })
         .subscribe((status) => {
           if (status === "SUBSCRIBED" && !channelMap.current.has(key)) {
@@ -104,8 +111,8 @@ export function useRealtime() {
       // Mark as subscribed immediately so we don't duplicate
       channelMap.current.set(key, ch);
 
-      // 2. THEN load message history to ensure no gap
-      const { data: msgs } = await supabase
+      // 2. THEN load message history — use admin to bypass RLS
+      const { data: msgs } = await supabaseAdmin
         .from("messages")
         .select("*, reactions(*)")
         .eq("room_key", key)
@@ -130,14 +137,45 @@ export function useRealtime() {
     }
 
     // ── Realtime adapter (store → Supabase) ──────────────────────────
+    // All writes use supabaseAdmin to bypass RLS
     setRealtimeAdapter({
       sendMessage: (to, msg) => {
         const key = roomKey(me, to);
-        supabase.from("rooms")
+        const store = useChatStore.getState();
+        const isVanishOn = store.vanishMode[to] && msg.type !== "vanish_mode" && msg.type !== "theme";
+
+        if (isVanishOn) {
+          // Pure ephemeral broadcast - never touches the database!
+          const ch = channelMap.current.get(key);
+          if (ch) {
+            ch.send({
+              type: "broadcast",
+              event: "vanish_msg",
+              payload: {
+                ...msg,
+                senderId: me,
+                createdAt: new Date().toISOString(),
+              },
+            });
+          } else {
+             // If not subscribed yet, subscribe then send
+             setupRoom(key, to).then(() => {
+                channelMap.current.get(key)?.send({
+                  type: "broadcast",
+                  event: "vanish_msg",
+                  payload: { ...msg, senderId: me, createdAt: new Date().toISOString() },
+                });
+             });
+          }
+          return true;
+        }
+
+        // Normal database persisted message
+        supabaseAdmin.from("rooms")
           .upsert({ key, user_a: me, user_b: to }, { onConflict: "key" })
           .then(({ error: roomErr }) => {
             if (roomErr) console.error("Room upsert error:", roomErr);
-            supabase.from("messages").insert({
+            supabaseAdmin.from("messages").insert({
               id: msg.id, room_key: key, sender_username: me,
               type: msg.type, content: msg.content,
               reply_to_id: msg.replyToId ?? null,
@@ -153,21 +191,21 @@ export function useRealtime() {
       },
 
       reactMessage: (_peer, messageId, emoji) => {
-        supabase.from("reactions")
+        supabaseAdmin.from("reactions")
           .select("*").eq("message_id", messageId).eq("user_id", me)
           .then(({ data }) => {
             if (data?.[0]?.emoji === emoji) {
-              supabase.from("reactions").delete().eq("message_id", messageId).eq("user_id", me);
+              supabaseAdmin.from("reactions").delete().eq("message_id", messageId).eq("user_id", me);
             } else {
-              supabase.from("reactions").delete().eq("message_id", messageId).eq("user_id", me)
-                .then(() => supabase.from("reactions").insert({ message_id: messageId, user_id: me, emoji }));
+              supabaseAdmin.from("reactions").delete().eq("message_id", messageId).eq("user_id", me)
+                .then(() => supabaseAdmin.from("reactions").insert({ message_id: messageId, user_id: me, emoji }));
             }
           });
         return true;
       },
 
       unsendMessage: (_peer, messageId) => {
-        supabase.from("messages")
+        supabaseAdmin.from("messages")
           .update({ is_unsent: true, content: "" })
           .eq("id", messageId).eq("sender_username", me);
         return true;
@@ -187,6 +225,18 @@ export function useRealtime() {
         if (ch) {
           ch.send({ type: "broadcast", event: "read", payload: { from: me, to } });
         }
+      },
+
+      deleteConversation: (to) => {
+        const key = roomKey(me, to);
+        supabaseAdmin.from("rooms").delete().eq("key", key).then(({ error }) => {
+          if (error) console.error("Error deleting room:", error);
+          const ch = channelMap.current.get(key);
+          if (ch) {
+            ch.unsubscribe();
+            channelMap.current.delete(key);
+          }
+        });
       },
     });
 

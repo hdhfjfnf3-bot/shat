@@ -22,7 +22,7 @@ const onErr = (e: React.SyntheticEvent<HTMLImageElement>) => {
   e.currentTarget.style.display = "none";
 };
 
-export function EmojiText({ text, size = 20 }: { text?: string | null; size?: number }) {
+export function EmojiText({ text, size = 20, disableJumbo = false }: { text?: string | null; size?: number; disableJumbo?: boolean }) {
   const style = useEmojiStyle((s) => s.style);
   const safe = typeof text === "string" ? text : "";
 
@@ -73,7 +73,7 @@ export function EmojiText({ text, size = 20 }: { text?: string | null; size?: nu
     return count > 0 && count <= 3;
   }, [safe]);
 
-  if (isJumbo && style !== "native") {
+  if (isJumbo && !disableJumbo && style !== "native") {
     const regex = emojiRegex();
     const jumbo: ReactNode[] = [];
     let m: RegExpExecArray | null;
@@ -95,7 +95,7 @@ export function EmojiText({ text, size = 20 }: { text?: string | null; size?: nu
     }
     return <span style={{ lineHeight: 1 }}>{jumbo}</span>;
   }
-  if (isJumbo && style === "native") {
+  if (isJumbo && !disableJumbo && style === "native") {
     return <span style={{ fontSize: 56, lineHeight: 1 }}>{safe}</span>;
   }
 

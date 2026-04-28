@@ -9,6 +9,7 @@ import { useMe } from "@/lib/me";
 import { AuthScreen } from "@/components/AuthScreen";
 import { useRealtime } from "@/lib/realtime";
 import { sounds } from "@/lib/sounds";
+import { checkUserExists } from "@/lib/auth";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,21 @@ function AppShell() {
 function App() {
   const username = useMe((s) => s.username);
   const token = useMe((s) => s.token);
+  const clearAuth = useMe((s) => s.clearAuth);
+
+  // Validate session on load
+  useEffect(() => {
+    if (username) {
+      checkUserExists(username).then((res) => {
+        if (!res.exists) {
+          console.error("Account missing from DB. Logging out.");
+          clearAuth();
+          window.location.href = "/";
+        }
+      }).catch(console.error);
+    }
+  }, [username, clearAuth]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

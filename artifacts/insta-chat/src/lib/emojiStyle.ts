@@ -14,7 +14,7 @@ export const EMOJI_STYLE_OPTIONS: { key: EmojiStyleKey; label: string }[] = [
 ];
 
 export const EMOJI_STYLE_TO_PICKER: Record<EmojiStyleKey, EmojiStyle> = {
-  instagram: EmojiStyle.FACEBOOK,
+  instagram: EmojiStyle.APPLE,
   apple: EmojiStyle.APPLE,
   facebook: EmojiStyle.FACEBOOK,
   google: EmojiStyle.GOOGLE,
@@ -23,7 +23,7 @@ export const EMOJI_STYLE_TO_PICKER: Record<EmojiStyleKey, EmojiStyle> = {
 };
 
 export const EMOJI_STYLE_TO_CDN: Record<Exclude<EmojiStyleKey, "native">, "apple" | "facebook" | "google" | "twitter"> = {
-  instagram: "facebook",
+  instagram: "apple",
   apple: "apple",
   facebook: "facebook",
   google: "google",

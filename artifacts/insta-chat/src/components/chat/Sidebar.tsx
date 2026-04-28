@@ -5,6 +5,7 @@ import { useChatStore } from "@/lib/store";
 import { useMe } from "@/lib/me";
 import { useEmojiStyle, EMOJI_STYLE_OPTIONS } from "@/lib/emojiStyle";
 import { EmojiText } from "./EmojiText";
+import { checkUserExists } from "@/lib/auth";
 
 /* ── debounce ───────────────────────────────────────────────────── */
 function debounce<T extends (...a: any[]) => any>(fn: T, ms: number): T {
@@ -20,8 +21,8 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
   const { conversations, setActiveConversation, createConversation, clearAll } = useChatStore();
   const { style, setStyle } = useEmojiStyle();
   const username  = useMe((s) => s.username);
-  const token     = useMe((s) => s.token);
   const clearAuth = useMe((s) => s.clearAuth);
+
 
   /* State */
   const [openEmoji,   setOpenEmoji]   = useState(false);
@@ -37,7 +38,7 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
   /* Logout */
   const handleLogout = () => { clearAll(); clearAuth(); setLocation("/"); };
 
-  /* Check user exists */
+  /* Check user exists — direct Supabase query, no RPC functions needed */
   const checkUser = useCallback(
     debounce(async (name: string) => {
       const clean = name.trim().toLowerCase().replace(/^@/, "");
@@ -45,16 +46,12 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
       if (clean === username?.toLowerCase()) { setCheckState("notfound"); return; }
       setCheckState("loading");
       try {
-        const res = await fetch(`/api/auth/check-user?username=${encodeURIComponent(clean)}`,
-          { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-        if (res.status === 404) { setCheckState("notfound"); setFoundUser(null); return; }
-        if (!res.ok) { setCheckState("error"); return; }
-        const d = await res.json();
-        setCheckState(d.exists ? "found" : "notfound");
-        setFoundUser(d.exists ? d.username : null);
+        const result = await checkUserExists(clean);
+        setCheckState(result.exists ? "found" : "notfound");
+        setFoundUser(result.exists ? result.username : null);
       } catch { setCheckState("error"); }
     }, 450),
-    [username, token]
+    [username]
   );
 
   useEffect(() => { checkUser(newName); }, [newName, checkUser]);
@@ -190,7 +187,7 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
                     <div className={`text-[12px] truncate mt-0.5 ${isUnread ? "text-white font-medium" : "text-[#555]"}`}>
                       {conv.lastMessage
                         ? conv.lastMessage.type === "voice" ? "🎤 رسالة صوتية"
-                          : <EmojiText text={conv.lastMessage.content} size={12} />
+                          : <EmojiText text={conv.lastMessage.content} size={12} disableJumbo />
                         : "اضغط للبدء بالدردشة"}
                       {conv.lastMessage?.createdAt && (
                         <span className="mr-1 text-[#444]">

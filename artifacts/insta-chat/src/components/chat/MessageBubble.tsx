@@ -4,8 +4,25 @@ import { Message, CURRENT_USER, User } from "@/lib/types";
 import { useChatStore } from "@/lib/store";
 import { EmojiText } from "./EmojiText";
 import { VoiceMessage } from "./VoiceMessage";
+import { RpsInlineGame } from "./RpsInlineGame";
+import { XoInlineGame } from "./XoInlineGame";
+import { GameHubInline } from "./GameHubInline";
+import { SnakesLaddersInline } from "./SnakesLaddersInline";
+import { BankElHazInline } from "./BankElHazInline";
+import { CardsInlineGame } from "./CardsInlineGame";
+import { DominoesInlineGame } from "./DominoesInlineGame";
+import { Connect4InlineGame } from "./Connect4InlineGame";
+import { DotsBoxesInlineGame } from "./DotsBoxesInlineGame";
 
 const QUICK_REACTIONS = ["❤️", "😂", "😮", "😢", "😡", "👍"];
+
+function safeJsonParse<T>(s: string): T | null {
+  try {
+    return JSON.parse(s) as T;
+  } catch {
+    return null;
+  }
+}
 
 interface Props {
   msg: Message;
@@ -19,6 +36,16 @@ interface Props {
   allMessages: Message[];
 }
 
+const themeColorsMap: Record<string, string> = {
+  default: "bg-gradient-to-br from-[#3b82f6] to-[#8b5cf6]",
+  monochrome: "bg-gradient-to-br from-[#444444] to-[#111111]",
+  ocean: "bg-gradient-to-br from-[#00c6ff] to-[#0072ff]",
+  love: "bg-gradient-to-br from-[#ff0844] to-[#ffb199]",
+  cyberpunk: "bg-gradient-to-br from-[#f000ff] to-[#00d4ff]",
+  forest: "bg-gradient-to-br from-[#11998e] to-[#38ef7d]",
+  halloween: "bg-gradient-to-br from-[#ff8c00] to-[#e52e71]",
+};
+
 export const MessageBubble = memo(function MessageBubble({
   msg, isOwn, isFirstInGroup, isLastInGroup, isLastOverall,
   borderRadius, otherUser, conversationId, allMessages,
@@ -27,8 +54,46 @@ export const MessageBubble = memo(function MessageBubble({
   const [showActions, setShowActions] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
+  const [swipeX, setSwipeX] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const lastTap = useRef(0);
+
+  /* Touch Gestures for Swipe-to-Reply */
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    setIsSwiping(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const dx = e.touches[0].clientX - touchStartRef.current.x;
+    const dy = e.touches[0].clientY - touchStartRef.current.y;
+    
+    // Cancel if swiping vertically
+    if (Math.abs(dy) > Math.abs(dx) && Math.abs(dx) < 15) {
+      touchStartRef.current = null;
+      setIsSwiping(false);
+      setSwipeX(0);
+      return;
+    }
+    
+    // Swipe left (negative dx) to reply
+    if (dx < 0) {
+      setSwipeX(Math.max(dx, -70));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (swipeX <= -55) {
+      handleReply();
+      if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(40);
+    }
+    touchStartRef.current = null;
+    setIsSwiping(false);
+    setSwipeX(0);
+  };
 
   /* Close on outside click */
   useEffect(() => {
@@ -62,11 +127,17 @@ export const MessageBubble = memo(function MessageBubble({
   const reactionEntries = Object.entries(reactionCounts);
   const myReaction = reactions.find((r) => r.userId === CURRENT_USER.id)?.emoji;
   const replyTo = msg.replyToId ? allMessages.find((m) => m.id === msg.replyToId) : null;
+  const gamePayload = msg.type === "game" ? safeJsonParse<{ kind?: string; gameId?: string }>(msg.content) : null;
+
+  /* Identify if the message is newly created to trigger animation */
+  const isNew = Date.now() - new Date(msg.createdAt).getTime() < 2000;
+  const animClass = isNew ? "animate-messageIn" : "";
+  const originStyle = { transformOrigin: isOwn ? "bottom right" : "bottom left" };
 
   /* ── Unsent ─────────────────────────────────────────────────── */
   if (msg.isUnsent) {
     return (
-      <div className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-[6px]" : "mt-[2px]"}`}>
+      <div className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-[6px]" : "mt-[2px]"} ${animClass}`} style={originStyle}>
         {!isOwn && isLastInGroup && <div className="w-[26px] ml-2 flex-shrink-0 flex items-end pb-[2px]"><img src={otherUser?.avatarUrl} className="w-[26px] h-[26px] rounded-full object-cover" /></div>}
         {!isOwn && !isLastInGroup && <div className="w-[34px] flex-shrink-0" />}
         <div className="px-3.5 py-2 text-[13px] italic text-[#737373] border border-white/10 rounded-[18px]">
@@ -76,14 +147,59 @@ export const MessageBubble = memo(function MessageBubble({
     );
   }
 
+  /* ── Theme Notification ─────────────────────────────────────── */
+  if (msg.type === "theme") {
+    const themeName = {
+      default: "الافتراضي", monochrome: "وضع التخفي (أسود)", ocean: "أمواج المحيط",
+      love: "حب ورومانسية", cyberpunk: "سايبر بانك نيون", forest: "غابة استوائية", halloween: "نار وهالوين"
+    }[msg.content] || msg.content;
+    
+    return (
+      <div className="w-full flex justify-center my-4 animate-in fade-in slide-in-from-bottom-2">
+        <div className="text-[11px] font-medium text-[#a8a8a8] bg-[#1a1a1a] px-4 py-1.5 rounded-full border border-white/[0.04]">
+          {isOwn ? "أنت غيرت ثيم المحادثة إلى " : "تم تغيير الثيم إلى "}
+          <span className="font-bold text-white">{themeName}</span> ✨
+        </div>
+      </div>
+    );
+  }
+
   /* ── Normal ─────────────────────────────────────────────────── */
+  const currentThemeMsg = allMessages ? [...allMessages].reverse().find(m => m.type === "theme") : undefined;
+  const currentThemeId = currentThemeMsg?.content || "default";
+  const themeClass = themeColorsMap[currentThemeId] || themeColorsMap["default"];
+
   return (
-    <div
-      ref={wrapRef}
-      className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-[6px]" : "mt-[2px]"} relative group`}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => { if (!showMenu && !showReactions) setShowActions(false); }}
-    >
+    <div className="relative w-full overflow-visible">
+      {/* Swipe to reply icon indicator */}
+      {swipeX < 0 && (
+        <div 
+          className={`absolute top-1/2 -translate-y-1/2 flex items-center justify-center rounded-full bg-white/10 ${isOwn ? "right-2" : "right-10"}`}
+          style={{ 
+            width: 32, height: 32,
+            opacity: Math.min(1, Math.abs(swipeX) / 50),
+            transform: `scale(${Math.min(1, Math.abs(swipeX) / 55)})`
+          }}
+        >
+          <CornerUpLeft className="w-4 h-4 text-white" />
+        </div>
+      )}
+
+      <div
+        ref={wrapRef}
+        className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-[6px]" : "mt-[2px]"} relative group ${animClass}`}
+        style={{ 
+          ...originStyle, 
+          transform: swipeX !== 0 ? `translateX(${swipeX}px)` : undefined,
+          transition: isSwiping ? "none" : "transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+        onMouseEnter={() => setShowActions(true)}
+        onMouseLeave={() => { if (!showMenu && !showReactions) setShowActions(false); }}
+      >
       {/* Other user avatar */}
       {!isOwn && isLastInGroup && (
         <div className="w-[26px] ml-2 flex-shrink-0 flex items-end pb-[2px]">
@@ -128,11 +244,13 @@ export const MessageBubble = memo(function MessageBubble({
             className={`relative select-none cursor-pointer ig-pop ${
               msg.type === "like" ? "text-[44px] animate-heartBeat -my-2" :
               msg.type === "image" || msg.type === "video" ? "p-0 overflow-hidden border border-white/10" :
-              msg.type === "voice" ? "px-3 py-2 text-[14px]" : "px-[14px] py-[8px] text-[14px]"
+              msg.type === "voice" ? "px-3 py-2 text-[14px]" :
+              msg.type === "game" ? "p-0 overflow-hidden border border-white/10 bg-[#1a1a1a]" :
+              "px-[14px] py-[8px] text-[14px]"
             } leading-[1.3] break-words ${
               msg.type === "like" ? "" :
               msg.type === "image" || msg.type === "video" ? "bg-[#1a1a1a]" :
-              isOwn ? "bg-[#3797f0] text-white shadow-sm" : "bg-[#262626] text-[#fafafa]"
+              isOwn ? `${themeClass} text-white shadow-sm` : "bg-[#1a1a1a] border border-white/[0.04] text-[#fafafa]"
             }`}
             style={{ borderRadius: msg.type === "like" ? "0" : borderRadius }}
             dir="auto"
@@ -145,6 +263,72 @@ export const MessageBubble = memo(function MessageBubble({
               <img src={msg.content} alt="صورة" className="max-w-[240px] max-h-[320px] sm:max-w-[280px] object-cover" />
             ) : msg.type === "video" ? (
               <video src={msg.content} controls className="max-w-[240px] max-h-[320px] sm:max-w-[280px] object-cover bg-black" />
+            ) : msg.type === "game" ? (
+              <div className="max-w-[320px] sm:max-w-[360px]">
+                {gamePayload?.kind === "hub" ? (
+                  <GameHubInline hubMessage={msg} conversationId={conversationId} />
+                ) : gamePayload?.kind === "rps" ? (
+                  <RpsInlineGame
+                    gameMessage={msg}
+                    otherUserId={(otherUser?.id ?? "").toLowerCase()}
+                    conversationId={conversationId}
+                    allMessages={allMessages}
+                  />
+                ) : gamePayload?.kind === "xo_start" ? (
+                  <XoInlineGame
+                    gameMessage={msg}
+                    otherUserId={(otherUser?.id ?? "").toLowerCase()}
+                    conversationId={conversationId}
+                    allMessages={allMessages}
+                  />
+                ) : gamePayload?.kind === "db_start" ? (
+                  <DotsBoxesInlineGame
+                    gameMessage={msg}
+                    otherUserId={(otherUser?.id ?? "").toLowerCase()}
+                    conversationId={conversationId}
+                    allMessages={allMessages}
+                  />
+                ) : gamePayload?.kind === "c4_start" ? (
+                  <Connect4InlineGame
+                    gameMessage={msg}
+                    otherUserId={(otherUser?.id ?? "").toLowerCase()}
+                    conversationId={conversationId}
+                    allMessages={allMessages}
+                  />
+                ) : gamePayload?.kind === "sl_start" ? (
+                  <SnakesLaddersInline
+                    gameMessage={msg}
+                    otherUserId={(otherUser?.id ?? "").toLowerCase()}
+                    conversationId={conversationId}
+                    allMessages={allMessages}
+                  />
+                ) : gamePayload?.kind === "bank_start" ? (
+                  <BankElHazInline
+                    gameMessage={msg}
+                    otherUserId={(otherUser?.id ?? "").toLowerCase()}
+                    conversationId={conversationId}
+                    allMessages={allMessages}
+                  />
+                ) : gamePayload?.kind === "cards_start" ? (
+                  <CardsInlineGame
+                    gameMessage={msg}
+                    otherUserId={(otherUser?.id ?? "").toLowerCase()}
+                    conversationId={conversationId}
+                    allMessages={allMessages}
+                  />
+                ) : gamePayload?.kind === "domino_start" ? (
+                  <DominoesInlineGame
+                    gameMessage={msg}
+                    otherUserId={(otherUser?.id ?? "").toLowerCase()}
+                    conversationId={conversationId}
+                    allMessages={allMessages}
+                  />
+                ) : (
+                  <div className="rounded-2xl border border-white/10 bg-[#141414] p-3 text-[13px] text-[#a8a8a8]">
+                    رسالة لعبة ({gamePayload?.kind ?? "غير معروف"}).
+                  </div>
+                )}
+              </div>
             ) : (
               <EmojiText text={msg.content} />
             )}
@@ -219,6 +403,7 @@ export const MessageBubble = memo(function MessageBubble({
             {msg.status === "sending" ? "جاري الإرسال..." : msg.status === "sent" ? "تم الإرسال" : msg.status === "delivered" ? "تم التسليم" : "مقروءة"}
           </div>
         )}
+      </div>
       </div>
     </div>
   );

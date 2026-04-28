@@ -8,7 +8,18 @@ export type User = {
   lastSeenAt: string;
 };
 
-export type MessageType = "text" | "image" | "video" | "voice" | "gif" | "sticker" | "reply" | "like" | "game";
+export type MessageType =
+  | "text"
+  | "image"
+  | "video"
+  | "voice"
+  | "gif"
+  | "sticker"
+  | "reply"
+  | "like"
+  | "game"
+  | "theme"
+  | "vanish_mode";
 
 export type VoiceMeta = {
   duration: number;

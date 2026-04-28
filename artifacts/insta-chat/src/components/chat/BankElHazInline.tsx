@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { Message } from "@/lib/types";
 import { useMe } from "@/lib/me";
 import { useChatStore } from "@/lib/store";
-import { Coins, HelpCircle, Siren, Train, Zap, Droplets, MapPin, Building2, Gavel } from "lucide-react";
+import { Coins, Siren, Train, Zap, Droplets, MapPin, Building2, Gavel, Landmark, Home, WalletCards } from "lucide-react";
 
 type BankStartPayload = { kind: "bank_start"; gameId: string; createdBy: string; createdAt: string; token: "🚗" | "🏎️" | "🚕" | "🛻" };
 type BankJoinPayload = { kind: "bank_join"; gameId: string; by: string; token: "🚗" | "🏎️" | "🚕" | "🛻"; at: string };
@@ -11,47 +11,96 @@ type BankBuyPayload = { kind: "bank_buy"; gameId: string; by: string; square: nu
 type BankPayPayload = { kind: "bank_pay"; gameId: string; by: string; to: string; amount: number; reason: string; at: string };
 type BankUpgradePayload = { kind: "bank_upgrade"; gameId: string; by: string; square: number; at: string };
 type BankSellPayload = { kind: "bank_sell"; gameId: string; by: string; square: number; at: string };
+type BankUseJailCardPayload = { kind: "bank_use_jail_card"; gameId: string; by: string; at: string };
 
-type BankPayload = BankStartPayload | BankJoinPayload | BankRollPayload | BankBuyPayload | BankPayPayload | BankUpgradePayload | BankSellPayload;
+type BankPayload =
+  | BankStartPayload
+  | BankJoinPayload
+  | BankRollPayload
+  | BankBuyPayload
+  | BankPayPayload
+  | BankUpgradePayload
+  | BankSellPayload
+  | BankUseJailCardPayload;
 
 type Square =
   | { kind: "go"; name: "البداية"; salary: number }
-  | { kind: "property"; name: string; price: number; rent: number; color: string }
+  | { kind: "property"; name: string; price: number; rent: number; color: string; group: string }
   | { kind: "tax"; name: string; amount: number }
-  | { kind: "chance"; name: string; min: number; max: number }
+  | { kind: "chance"; name: string; deck: "chance" | "chest" }
   | { kind: "jail"; name: "السجن" }
-  | { kind: "parking"; name: "استراحة" }
+  | { kind: "parking"; name: string }
   | { kind: "gotojail"; name: "البوليس" }
   | { kind: "utility"; name: string; price: number; type: "water" | "electric" | "station" };
+
+type BankCard = {
+  title: string;
+  text: string;
+  effect:
+    | { kind: "money"; amount: number }
+    | { kind: "move"; to: number }
+    | { kind: "jail" }
+    | { kind: "jail_card" };
+};
 
 const TOKENS: Array<BankStartPayload["token"]> = ["🚗", "🏎️", "🚕", "🛻"];
 
 const BOARD: Square[] = [
   { kind: "go", name: "البداية", salary: 200 }, // 0
-  { kind: "property", name: "المطرية", price: 60, rent: 10, color: "أحمر" }, // 1
-  { kind: "chance", name: "محطة حظ", min: -50, max: 100 }, // 2
-  { kind: "property", name: "شبرا", price: 60, rent: 10, color: "أحمر" }, // 3
+  { kind: "property", name: "المطرية", price: 60, rent: 10, color: "أحمر", group: "red" }, // 1
+  { kind: "chance", name: "فرصة", deck: "chance" }, // 2
+  { kind: "property", name: "شبرا", price: 60, rent: 10, color: "أحمر", group: "red" }, // 3
   { kind: "tax", name: "ضريبة", amount: 50 }, // 4
-  { kind: "property", name: "دمنهور", price: 100, rent: 15, color: "أزرق" }, // 5
+  { kind: "property", name: "دمنهور", price: 100, rent: 15, color: "أزرق", group: "blue" }, // 5
   { kind: "jail", name: "السجن" }, // 6
-  { kind: "property", name: "طنطا", price: 100, rent: 15, color: "أزرق" }, // 7
+  { kind: "property", name: "طنطا", price: 100, rent: 15, color: "أزرق", group: "blue" }, // 7
   { kind: "utility", name: "المياه", price: 150, type: "water" }, // 8
-  { kind: "chance", name: "محاكمة", min: -100, max: 0 }, // 9
-  { kind: "property", name: "المنصورة", price: 120, rent: 20, color: "أصفر" }, // 10
-  { kind: "property", name: "الزقازيق", price: 120, rent: 20, color: "أصفر" }, // 11
+  { kind: "chance", name: "خزنة", deck: "chest" }, // 9
+  { kind: "property", name: "المنصورة", price: 120, rent: 20, color: "أصفر", group: "yellow" }, // 10
+  { kind: "property", name: "الزقازيق", price: 120, rent: 20, color: "أصفر", group: "yellow" }, // 11
   { kind: "parking", name: "جراج" }, // 12
-  { kind: "property", name: "الإسماعيلية", price: 140, rent: 25, color: "أخضر" }, // 13
+  { kind: "property", name: "الإسماعيلية", price: 140, rent: 25, color: "أخضر", group: "green" }, // 13
   { kind: "tax", name: "رسوم", amount: 100 }, // 14
-  { kind: "property", name: "السويس", price: 140, rent: 25, color: "أخضر" }, // 15
-  { kind: "property", name: "بورسعيد", price: 160, rent: 30, color: "أخضر" }, // 16
-  { kind: "chance", name: "محطة حظ", min: 0, max: 200 }, // 17
+  { kind: "property", name: "السويس", price: 140, rent: 25, color: "أخضر", group: "green" }, // 15
+  { kind: "property", name: "بورسعيد", price: 160, rent: 30, color: "أخضر", group: "green" }, // 16
+  { kind: "chance", name: "فرصة", deck: "chance" }, // 17
   { kind: "gotojail", name: "البوليس" }, // 18
-  { kind: "property", name: "الإسكندرية", price: 200, rent: 40, color: "بنفسجي" }, // 19
+  { kind: "property", name: "الإسكندرية", price: 200, rent: 40, color: "بنفسجي", group: "purple" }, // 19
   { kind: "utility", name: "الكهرباء", price: 150, type: "electric" }, // 20
-  { kind: "property", name: "القاهرة", price: 300, rent: 50, color: "بنفسجي" }, // 21
+  { kind: "property", name: "القاهرة", price: 300, rent: 50, color: "بنفسجي", group: "purple" }, // 21
   { kind: "tax", name: "ضريبة", amount: 150 }, // 22
-  { kind: "property", name: "أسوان", price: 400, rent: 70, color: "أسود" }, // 23
+  { kind: "property", name: "أسوان", price: 400, rent: 70, color: "أسود", group: "black" }, // 23
 ];
+
+const CHANCE_CARDS: BankCard[] = [
+  { title: "فرصة", text: "تحرك إلى البداية وخد مرتبك.", effect: { kind: "move", to: 0 } },
+  { title: "فرصة", text: "البنك يكافئك. استلم 120$.", effect: { kind: "money", amount: 120 } },
+  { title: "فرصة", text: "ادفع مصاريف صيانة. -90$", effect: { kind: "money", amount: -90 } },
+  { title: "فرصة", text: "تحرك إلى القاهرة.", effect: { kind: "move", to: 21 } },
+  { title: "فرصة", text: "اذهب إلى السجن مباشرة.", effect: { kind: "jail" } },
+  { title: "فرصة", text: "تحرك إلى الإسكندرية.", effect: { kind: "move", to: 19 } },
+  { title: "فرصة", text: "اربح مسابقة استثمار. +200$", effect: { kind: "money", amount: 200 } },
+  { title: "فرصة", text: "ادفع غرامة مرورية. -60$", effect: { kind: "money", amount: -60 } },
+  { title: "فرصة", text: "كارت خروج من السجن مجانًا.", effect: { kind: "jail_card" } },
+];
+
+const CHEST_CARDS: BankCard[] = [
+  { title: "الخزنة", text: "مكسب مفاجئ من البنك. +100$", effect: { kind: "money", amount: 100 } },
+  { title: "الخزنة", text: "إصلاحات بيتك. -70$", effect: { kind: "money", amount: -70 } },
+  { title: "الخزنة", text: "ارجع إلى البداية.", effect: { kind: "move", to: 0 } },
+  { title: "الخزنة", text: "غرامة مرورية. -40$", effect: { kind: "money", amount: -40 } },
+  { title: "الخزنة", text: "مكافأة شطارتك. +150$", effect: { kind: "money", amount: 150 } },
+  { title: "الخزنة", text: "سحب من التوفير. +80$", effect: { kind: "money", amount: 80 } },
+  { title: "الخزنة", text: "تأمين العربية. -50$", effect: { kind: "money", amount: -50 } },
+  { title: "الخزنة", text: "اذهب إلى السجن.", effect: { kind: "jail" } },
+  { title: "الخزنة", text: "كارت خروج من السجن مجانًا.", effect: { kind: "jail_card" } },
+];
+
+const PROPERTY_GROUPS = BOARD.reduce<Record<string, number[]>>((acc, sq, idx) => {
+  if (sq.kind !== "property") return acc;
+  acc[sq.group] = [...(acc[sq.group] ?? []), idx];
+  return acc;
+}, {});
 
 function safeJsonParse<T>(s: string): T | null {
   try { return JSON.parse(s) as T; } catch { return null; }
@@ -100,7 +149,7 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
       .filter((m) => m.type === "game")
       .map((m) => safeJsonParse<BankPayload>(m.content))
       .filter((p): p is BankPayload => p !== null && p.gameId === gameId)
-      .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+      .sort((a, b) => new Date("at" in a ? a.at : a.createdAt).getTime() - new Date("at" in b ? b.at : b.createdAt).getTime());
   }, [allMessages, gameId]);
 
   const state = useMemo(() => {
@@ -116,8 +165,11 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
     let owner: Record<number, string> = {};
     let houses: Record<number, number> = {};
     let inJail: Record<string, boolean> = {};
+    let jailAttempts: Record<string, number> = { [p1]: 0, [p2]: 0 };
+    let jailCards: Record<string, number> = { [p1]: 0, [p2]: 0 };
     let bankrupt: Record<string, boolean> = { [p1]: false, [p2]: false };
-    let last: { text: string; by?: string; icon?: string } | null = null;
+      let last: { text: string; by?: string; icon?: string } | null = null;
+      let lastCard: { deck: "chance" | "chest"; card: BankCard } | null = null;
     let currentDice: [number, number] = [6, 6];
 
     const autoSell = (player: string) => {
@@ -163,12 +215,19 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
         if (inJail[by]) {
           if (isDouble) {
             inJail[by] = false;
+            jailAttempts[by] = 0;
             last = { by, text: `رمى مزدوج وخرج من السجن!`, icon: "🔓" };
-          } else {
+          } else if ((jailAttempts[by] ?? 0) >= 2) {
             cash[by] = (cash[by] ?? 0) - 50;
             inJail[by] = false;
+            jailAttempts[by] = 0;
             autoSell(by);
-            last = { by, text: `دفع 50$ كفالة وخرج من السجن`, icon: "💰" };
+            last = { by, text: `فشل 3 مرات، دفع 50$ وخرج من السجن`, icon: "💰" };
+          } else {
+            jailAttempts[by] = (jailAttempts[by] ?? 0) + 1;
+            last = { by, text: `محاولة ${jailAttempts[by]} من 3 للخروج من السجن`, icon: "⛓️" };
+            turn = by === p1 ? p2 : p1;
+            continue;
           }
         }
 
@@ -195,18 +254,46 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
           last = { by, text: `دفع ضريبة ${sq.amount}$`, icon: "🧾" };
           autoSell(by);
         } else if (sq.kind === "chance") {
-          const delta = Math.floor(Math.random() * (sq.max - sq.min + 1)) + sq.min;
-          const applied = delta === 0 ? 50 : delta;
-          cash[by] = (cash[by] ?? 0) + applied;
-          last = { by, text: `بطاقة حظ: ${applied >= 0 ? "+" : ""}${applied}$`, icon: applied >= 0 ? "🎁" : "⚖️" };
-          autoSell(by);
+          const deck = sq.deck === "chance" ? CHANCE_CARDS : CHEST_CARDS;
+          const seedIndex = (pos[by] + steps + (cash[by] ?? 0) + from) % deck.length;
+          const card = deck[Math.abs(seedIndex)]!;
+          lastCard = { deck: sq.deck, card };
+
+          if (card.effect.kind === "money") {
+            cash[by] = (cash[by] ?? 0) + card.effect.amount;
+            last = {
+              by,
+              text: `${card.title}: ${card.effect.amount >= 0 ? "+" : ""}${card.effect.amount}$`,
+              icon: card.effect.amount >= 0 ? "🎁" : "💸",
+            };
+            autoSell(by);
+          } else if (card.effect.kind === "move") {
+            if (card.effect.to < (pos[by] ?? 0)) {
+              cash[by] = (cash[by] ?? 0) + 200;
+            }
+            pos[by] = card.effect.to;
+            last = { by, text: `${card.title}: ${card.text}`, icon: "🃏" };
+          } else if (card.effect.kind === "jail") {
+            pos[by] = 6;
+            inJail[by] = true;
+            jailAttempts[by] = 0;
+            last = { by, text: `${card.title}: اذهب إلى السجن`, icon: "🚨" };
+          } else if (card.effect.kind === "jail_card") {
+            jailCards[by] = (jailCards[by] ?? 0) + 1;
+            last = { by, text: `${card.title}: كسبت كارت خروج من السجن`, icon: "🎫" };
+          }
         } else if (sq.kind === "property" || sq.kind === "utility") {
           const o = owner[pos[by]!];
           if (o && o !== by) {
             let rent = sq.kind === "property" ? sq.rent : steps * 5;
             if (sq.kind === "property") {
               const h = houses[pos[by]!] ?? 0;
+              const groupSquares = PROPERTY_GROUPS[sq.group] ?? [];
+              const fullSet = groupSquares.length > 0 && groupSquares.every((index) => owner[index] === o);
               rent = Math.floor(rent * (1 + h * 1.5));
+              if (fullSet && h === 0) {
+                rent *= 2;
+              }
             }
             applyPay(by, o, rent, "إيجار");
           }
@@ -249,12 +336,39 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
           last = { by, text: `باع ${sq.name} للبنك`, icon: "🏦" };
         }
       }
+
+      if (e.kind === "bank_use_jail_card") {
+        const by = e.by.toLowerCase();
+        if ((jailCards[by] ?? 0) > 0 && inJail[by]) {
+          jailCards[by] -= 1;
+          inJail[by] = false;
+          jailAttempts[by] = 0;
+          last = { by, text: `استخدم كارت خروج من السجن`, icon: "🎫" };
+        }
+      }
     }
 
     const p1Token = tokenBy[p1] ?? "🚗";
     const p2Token = tokenBy[p2] ?? pickRandomToken(p1Token);
 
-    return { p1, p2, tokens: { [p1]: p1Token, [p2]: p2Token }, joined, turn, pos, cash, owner, houses, inJail, bankrupt, last, currentDice };
+    return {
+      p1,
+      p2,
+      tokens: { [p1]: p1Token, [p2]: p2Token },
+      joined,
+      turn,
+      pos,
+      cash,
+      owner,
+      houses,
+      inJail,
+      jailAttempts,
+      jailCards,
+      bankrupt,
+      last,
+      lastCard,
+      currentDice,
+    };
   }, [events, me, otherUserId, start?.createdBy, start?.token]);
 
   useEffect(() => {
@@ -278,11 +392,17 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
   const canBuy = (sq.kind === "property" || sq.kind === "utility") && !state.owner[mePos] && meCash >= sq.price;
   const canUpgrade = sq.kind === "property" && amOwner && meCash >= Math.floor(sq.price / 2) && (state.houses[mePos] ?? 0) < 4;
   const canSell = amOwner;
+  const canUseJailCard = state.inJail[me] && (state.jailCards[me] ?? 0) > 0;
+
+  const fullSetOwned = sq.kind === "property"
+    ? (PROPERTY_GROUPS[sq.group] ?? []).every((index) => state.owner[index] === me)
+    : false;
 
   const join = () => sendMessage(conversationId, JSON.stringify({ kind: "bank_join", gameId, by: me, token: pickRandomToken(state.tokens[state.p1]), at: new Date().toISOString() }), "game");
   const buy = () => canBuy && sendMessage(conversationId, JSON.stringify({ kind: "bank_buy", gameId, by: me, square: mePos, at: new Date().toISOString() }), "game");
   const upgrade = () => canUpgrade && sendMessage(conversationId, JSON.stringify({ kind: "bank_upgrade", gameId, by: me, square: mePos, at: new Date().toISOString() }), "game");
   const sell = () => canSell && sendMessage(conversationId, JSON.stringify({ kind: "bank_sell", gameId, by: me, square: mePos, at: new Date().toISOString() }), "game");
+  const useJailCard = () => canUseJailCard && sendMessage(conversationId, JSON.stringify({ kind: "bank_use_jail_card", gameId, by: me, at: new Date().toISOString() }), "game");
 
   const roll = () => {
     if (!myTurn || isRolling) return;
@@ -340,13 +460,15 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
         )}
         
         {/* Top Icon for specials */}
-        {sq.kind === "chance" && <HelpCircle className="w-4 h-4 text-[#eab308] mt-1 drop-shadow-sm" />}
+        {sq.kind === "chance" && <WalletCards className="w-4 h-4 text-[#eab308] mt-1 drop-shadow-sm" />}
         {sq.kind === "tax" && <Coins className="w-4 h-4 text-[#ef4444] mt-1 drop-shadow-sm" />}
         {sq.kind === "utility" && sq.type === "water" && <Droplets className="w-4 h-4 text-[#3b82f6] mt-1 drop-shadow-sm" />}
         {sq.kind === "utility" && sq.type === "electric" && <Zap className="w-4 h-4 text-[#eab308] mt-1 drop-shadow-sm" />}
+        {sq.kind === "utility" && sq.type === "station" && <Train className="w-4 h-4 text-[#6b7280] mt-1 drop-shadow-sm" />}
         {sq.kind === "jail" && <Siren className="w-4 h-4 text-[#ef4444] mt-1 drop-shadow-sm" />}
         {sq.kind === "gotojail" && <Gavel className="w-4 h-4 text-[#ef4444] mt-1 drop-shadow-sm" />}
         {sq.kind === "parking" && <MapPin className="w-4 h-4 text-[#3b82f6] mt-1 drop-shadow-sm" />}
+        {sq.kind === "go" && <Landmark className="w-4 h-4 text-[#22c55e] mt-1 drop-shadow-sm" />}
 
         {/* Houses */}
         {state.houses[i] > 0 && (
@@ -376,11 +498,11 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0f0f0f] overflow-hidden w-[310px] sm:w-[350px] shadow-2xl font-sans">
-      <div className="p-2 aspect-square relative bg-[#2a3026]">
+    <div className="rounded-2xl border border-white/10 bg-[#0f0f0f] overflow-hidden w-[350px] sm:w-[420px] shadow-2xl font-sans">
+      <div className="p-2 sm:p-3 aspect-square relative bg-[radial-gradient(circle_at_center,_#354333_0%,_#1a1f1a_100%)]">
         
         {/* Realistic Board Background */}
-        <div className="absolute inset-2 bg-[#d1e5d7] rounded-sm shadow-inner ring-1 ring-black/20" dir="ltr">
+        <div className="absolute inset-2 sm:inset-3 bg-[linear-gradient(135deg,#dde9db_0%,#cfdcc7_45%,#dce6d6_100%)] rounded-sm shadow-inner ring-1 ring-black/20" dir="ltr">
           {BOARD.map((sq, i) => renderSquare(sq, i))}
 
           {/* Tokens (Absolute Floating Overlay) */}
@@ -401,7 +523,7 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
           )}
 
           {/* Center Area (Realistic style) */}
-          <div className="absolute top-[14.28%] left-[14.28%] w-[71.42%] h-[71.42%] flex flex-col items-center justify-center p-3 text-center pointer-events-none" dir="rtl">
+          <div className="absolute top-[14.28%] left-[14.28%] w-[71.42%] h-[71.42%] flex flex-col items-center justify-center p-3 sm:p-4 text-center pointer-events-none" dir="rtl">
             
             {/* Center Logo/Branding */}
             <div className="absolute inset-0 flex flex-col items-center justify-center opacity-10 rotate-[-45deg] select-none pointer-events-none">
@@ -411,8 +533,8 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
 
             <div className="z-10 w-full h-full flex flex-col items-center justify-between pointer-events-auto relative">
               
-              <div className="bg-gradient-to-br from-[#00d26a] to-[#00a854] px-4 py-1.5 rounded-full shadow-lg border border-white/20 mb-1">
-                <h3 className="text-[12px] sm:text-[14px] font-black text-white tracking-widest uppercase drop-shadow-md">بنك الحظ المصرى</h3>
+              <div className="bg-gradient-to-br from-[#00d26a] to-[#00a854] px-4 sm:px-5 py-1.5 sm:py-2 rounded-full shadow-lg border border-white/20 mb-1">
+                <h3 className="text-[12px] sm:text-[15px] font-black text-white tracking-widest uppercase drop-shadow-md">بنك الحظ المصرى</h3>
               </div>
 
               {/* Dice Container */}
@@ -422,7 +544,7 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
               </div>
 
               {/* Event Log Plaque */}
-              <div className="w-full bg-white/90 backdrop-blur-sm rounded-lg border border-black/10 shadow-md p-1.5 min-h-[36px] flex items-center justify-center mt-2 mb-2">
+              <div className="w-full bg-white/90 backdrop-blur-sm rounded-lg border border-black/10 shadow-md p-1.5 sm:p-2 min-h-[42px] flex items-center justify-center mt-2 mb-2">
                 {state.last ? (
                   <div className="flex items-center gap-1.5 text-[11px] sm:text-[12px] font-bold text-gray-800">
                     <span className="text-[14px]">{state.last.icon}</span>
@@ -457,6 +579,38 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
             </div>
           </div>
         )}
+
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="rounded-xl border border-white/10 bg-black/30 p-2">
+            <div className="text-[10px] text-[#777] mb-1">صك الملكية الحالي</div>
+            <div className="text-[13px] text-white font-bold">
+              {sq.kind === "property" || sq.kind === "utility" ? sq.name : "مفيش صك هنا"}
+            </div>
+            <div className="text-[11px] text-[#a8a8a8] mt-1">
+              {sq.kind === "property"
+                ? `سعر ${sq.price}$ • إيجار ${sq.rent}$${fullSetOwned ? " • طقم كامل x2" : ""} • بيوت ${state.houses[mePos] ?? 0}`
+                : sq.kind === "utility"
+                  ? `سعر ${sq.price}$ • مرفق خاص`
+                  : sq.kind === "tax"
+                    ? `ضريبة ${sq.amount}$`
+                    : sq.kind === "chance"
+                      ? "اسحب كارت"
+                      : sq.kind === "go"
+                        ? `مرتب ${sq.salary}$`
+                        : sq.name}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-gradient-to-br from-[#f7edd3] to-[#e7d2a7] p-2 text-[#2a210f] shadow-inner">
+            <div className="text-[10px] font-bold tracking-wide uppercase opacity-70 mb-1">
+              {state.lastCard?.deck === "chance" ? "Chance Card" : state.lastCard?.deck === "chest" ? "Community Chest" : "Card"}
+            </div>
+            <div className="text-[13px] font-black">{state.lastCard?.card.title ?? "آخر كارت"}</div>
+            <div className="text-[11px] mt-1 leading-snug min-h-[34px]">
+              {state.lastCard?.card.text ?? "لسه مفيش كارت متسحب."}
+            </div>
+          </div>
+        </div>
 
         {/* Buttons */}
         {!(state.bankrupt[state.p1] || state.bankrupt[state.p2]) && (
@@ -505,6 +659,35 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
                     )}
                   </div>
                 )}
+
+                {state.inJail[me] && (
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div className="rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-[11px] text-[#a8a8a8]">
+                      محاولات الخروج: {state.jailAttempts[me] ?? 0}/3
+                    </div>
+                    <button
+                      onClick={useJailCard}
+                      disabled={!canUseJailCard}
+                      className={`rounded-lg text-[12px] font-bold transition-all ${
+                        canUseJailCard
+                          ? "bg-gradient-to-r from-[#eab308] to-[#ca8a04] text-white shadow-md active:scale-[0.98] hover:brightness-110"
+                          : "bg-white/5 text-[#666] cursor-not-allowed border border-white/10"
+                      }`}
+                    >
+                      🎫 خروج ({state.jailCards[me] ?? 0})
+                    </button>
+                  </div>
+                )}
+
+                <div className="mt-2 rounded-xl border border-white/10 bg-black/30 px-2 py-2">
+                  <div className="flex items-center justify-between gap-2 text-[11px] text-[#a8a8a8]">
+                    <span className="flex items-center gap-1"><Home className="w-3.5 h-3.5" />البيوت عندك</span>
+                    <span className="font-bold text-white">
+                      {Object.entries(state.owner).filter(([, v]) => v === me).length} أملاك /{" "}
+                      {Object.values(state.houses).reduce((a, b) => a + b, 0)} مباني
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
           </div>

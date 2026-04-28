@@ -6,7 +6,7 @@ import { sounds } from "./sounds";
 type SendMeta = {
   id: string;
   content: string;
-  type: "text" | "image" | "video" | "voice" | "like" | "game";
+  type: "text" | "image" | "video" | "voice" | "like" | "game" | "theme" | "vanish_mode";
   replyToId?: string;
   voice?: VoiceMeta;
 };

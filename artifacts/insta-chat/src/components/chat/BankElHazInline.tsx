@@ -155,7 +155,7 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
   const state = useMemo(() => {
     const createdBy = (start?.createdBy ?? me).toLowerCase();
     const p1 = createdBy;
-    const p2 = otherUserId;
+    const p2 = p1 === me ? otherUserId.toLowerCase() : me;
     const tokenBy: Record<string, BankStartPayload["token"]> = { [p1]: start?.token ?? "🚗" };
 
     let joined = false;
@@ -498,7 +498,7 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0f0f0f] overflow-hidden w-[350px] sm:w-[420px] shadow-2xl font-sans">
+    <div className="rounded-2xl border border-white/10 bg-[#0f0f0f] overflow-hidden w-full shadow-2xl font-sans">
       <div className="p-2 sm:p-3 aspect-square relative bg-[radial-gradient(circle_at_center,_#354333_0%,_#1a1f1a_100%)]">
         
         {/* Realistic Board Background */}

@@ -47,7 +47,7 @@ export function Connect4InlineGame({
   const state = useMemo(() => {
     if (!start) return null;
     const p1 = start.createdBy.toLowerCase();
-    const p2 = otherUserId.toLowerCase();
+    const p2 = p1 === me ? otherUserId.toLowerCase() : me;
     
     // board[row][col] where row 0 is top, row 5 is bottom
     const board: (string | null)[][] = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
@@ -119,7 +119,7 @@ export function Connect4InlineGame({
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#1a2b4c] overflow-hidden w-[280px] sm:w-[320px] shadow-xl">
+    <div className="rounded-2xl border border-white/10 bg-[#1a2b4c] overflow-hidden w-full shadow-xl">
       <div className="bg-[#0f192e] px-3 py-2 flex justify-between items-center border-b border-white/10">
         <div className="font-bold text-white text-[13px]">🔵🔴 4 في صف (Connect 4)</div>
         <div className="text-[11px] text-[#ddd]">

@@ -173,7 +173,7 @@ export function CardsInlineGame({ gameMessage, otherUserId, conversationId, allM
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0f2414] overflow-hidden w-[300px] sm:w-[350px] shadow-2xl relative font-sans">
+    <div className="rounded-2xl border border-white/10 bg-[#0f2414] overflow-hidden w-full shadow-2xl relative font-sans">
       {/* Green Felt Texture */}
       <div className="absolute inset-0 opacity-50 mix-blend-overlay pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/felt.png')]" />
       

@@ -95,6 +95,8 @@ export function XoInlineGame({
   
   // Creator is always X, Other is O
   const getSymbol = (player: string) => player.toLowerCase() === start.createdBy.toLowerCase() ? "❌" : "⭕";
+  const getSymbolColor = (player: string) =>
+    player.toLowerCase() === start.createdBy.toLowerCase() ? "text-[#ff4d4f]" : "text-[#22c55e]";
   const mySymbol = getSymbol(me);
 
   const handleCellClick = (idx: number) => {
@@ -123,7 +125,7 @@ export function XoInlineGame({
         {statusText}
       </div>
 
-      <div className="grid grid-cols-3 gap-2 bg-white/10 p-2 rounded-xl">
+      <div className="w-full max-w-[400px] grid grid-cols-3 gap-2 bg-white/10 p-2 rounded-xl mt-2 mb-4">
         {state.board.map((cell, i) => {
           const isWinningCell = state.winningLine?.includes(i);
           return (
@@ -131,12 +133,12 @@ export function XoInlineGame({
               key={i}
               onClick={() => handleCellClick(i)}
               disabled={isDone || !myTurn || cell !== null}
-              className={`w-14 h-14 sm:w-16 sm:h-16 rounded-lg text-2xl flex items-center justify-center transition-all ${
+              className={`w-full aspect-square rounded-lg text-3xl sm:text-4xl flex items-center justify-center transition-all shadow-md ${
                 isWinningCell ? "bg-[#00d26a]/20 shadow-[0_0_15px_rgba(0,210,106,0.3)]" : 
                 cell ? "bg-[#262626]" : "bg-[#141414] hover:bg-white/10"
               }`}
             >
-              {cell ? getSymbol(cell) : ""}
+              {cell ? <span className={getSymbolColor(cell)}>{getSymbol(cell)}</span> : ""}
             </button>
           );
         })}
@@ -144,7 +146,10 @@ export function XoInlineGame({
       
       {!isDone && (
         <div className="mt-4 flex items-center gap-2 text-[12px] text-[#555]">
-          أنت تلعب كـ <span className="text-white">{mySymbol}</span>
+          أنت تلعب كـ{" "}
+          <span className={me.toLowerCase() === start.createdBy.toLowerCase() ? "text-[#ff4d4f]" : "text-[#22c55e]"}>
+            {mySymbol}
+          </span>
         </div>
       )}
     </div>

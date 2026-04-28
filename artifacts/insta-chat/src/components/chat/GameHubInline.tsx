@@ -49,6 +49,46 @@ type DominoStartPayload = {
   createdBy: string;
 };
 
+type QndStartPayload = {
+  kind: "qnd_start";
+  gameId: string;
+  createdBy: string;
+  createdAt: string;
+  mode: "mix" | "questions" | "dares";
+  level: "خفيف" | "تقيل";
+  safeMode: boolean;
+};
+
+type EmojiPictStartPayload = {
+  kind: "emoji_pict_start";
+  gameId: string;
+  createdBy: string;
+  createdAt: string;
+};
+
+type FastTapStartPayload = {
+  kind: "fasttap_start";
+  gameId: string;
+  createdBy: string;
+  createdAt: string;
+};
+
+type WheelStartPayload = {
+  kind: "wheel_start";
+  gameId: string;
+  createdBy: string;
+  createdAt: string;
+  preset: "ضحك" | "رومانسية" | "ميكس";
+};
+
+type WordChainStartPayload = {
+  kind: "wordchain_start";
+  gameId: string;
+  createdBy: string;
+  createdAt: string;
+  rule: "آخر حرف" | "آخر حرفين";
+};
+
 type BankStartPayload = {
   kind: "bank_start";
   gameId: string;
@@ -80,10 +120,12 @@ function newId(): string {
 function HubButton({
   title,
   subtitle,
+  meta,
   onClick,
 }: {
   title: string;
   subtitle: string;
+  meta?: string;
   onClick: () => void;
 }) {
   return (
@@ -91,13 +133,22 @@ function HubButton({
       type="button"
       onClick={onClick}
       className={[
-        "w-full text-right rounded-2xl border border-white/10 bg-[#0f0f0f] p-3",
+        "w-full text-right rounded-2xl border border-white/10 bg-[linear-gradient(135deg,#0b0b0b_0%,#121212_65%,#0b0b0b_100%)] p-3",
         "hover:bg-white/5 active:bg-white/10 transition-colors",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20",
       ].join(" ")}
     >
-      <div className="text-[13px] font-bold text-white">{title}</div>
-      <div className="text-[12px] text-[#a8a8a8] mt-0.5">{subtitle}</div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[13px] font-black text-white">{title}</div>
+          <div className="text-[12px] text-[#a8a8a8] mt-0.5 leading-snug">{subtitle}</div>
+        </div>
+        {meta ? (
+          <div className="shrink-0 text-[11px] text-white/50 border border-white/10 rounded-full px-2 py-0.5">
+            {meta}
+          </div>
+        ) : null}
+      </div>
     </button>
   );
 }
@@ -134,6 +185,86 @@ export function GameHubInline({
       </div>
 
       <div className="px-3 pb-3 grid gap-2">
+        <HubButton
+          title="🎭 أسئلة وتحديات"
+          subtitle="شات ممتع: أسئلة، تحديات، وميكس… بمستويات."
+          meta="جديد"
+          onClick={() => {
+            const start: QndStartPayload = {
+              kind: "qnd_start",
+              gameId: newId(),
+              createdBy: CURRENT_USER.username,
+              createdAt: new Date().toISOString(),
+              mode: "mix",
+              level: "خفيف",
+              safeMode: true,
+            };
+            send(start);
+          }}
+        />
+
+        <HubButton
+          title="🧩 احكيها بالإيموجيز"
+          subtitle="تلميح بإيموجيز… والتاني يخمّن في رسالة."
+          meta="ضحك"
+          onClick={() => {
+            const start: EmojiPictStartPayload = {
+              kind: "emoji_pict_start",
+              gameId: newId(),
+              createdBy: CURRENT_USER.username,
+              createdAt: new Date().toISOString(),
+            };
+            send(start);
+          }}
+        />
+
+        <HubButton
+          title="⚡ النقر السريع"
+          subtitle="مين يضغط أكتر؟ تحدي سريع يكسّر الملل."
+          meta="سريع"
+          onClick={() => {
+            const start: FastTapStartPayload = {
+              kind: "fasttap_start",
+              gameId: newId(),
+              createdBy: CURRENT_USER.username,
+              createdAt: new Date().toISOString(),
+            };
+            send(start);
+          }}
+        />
+
+        <HubButton
+          title="🎡 عجلة الحظ"
+          subtitle="لف… وتطلع مهمة/تحدي يغيّر المود."
+          meta="ميكس"
+          onClick={() => {
+            const start: WheelStartPayload = {
+              kind: "wheel_start",
+              gameId: newId(),
+              createdBy: CURRENT_USER.username,
+              createdAt: new Date().toISOString(),
+              preset: "ميكس",
+            };
+            send(start);
+          }}
+        />
+
+        <HubButton
+          title="🔗 سلسلة كلمات"
+          subtitle="اكتب كلمة تبدأ بآخر حرف من اللي قبلها."
+          meta="ذكاء"
+          onClick={() => {
+            const start: WordChainStartPayload = {
+              kind: "wordchain_start",
+              gameId: newId(),
+              createdBy: CURRENT_USER.username,
+              createdAt: new Date().toISOString(),
+              rule: "آخر حرف",
+            };
+            send(start);
+          }}
+        />
+
         <HubButton
           title="🎲 حجر / ورقة / مقص"
           subtitle="سريعة وبتولّع الجو في ثواني."
@@ -206,6 +337,7 @@ export function GameHubInline({
         <HubButton
           title="🏦🚗 بنك الحظ (فلوس + بنك + أملاك)"
           subtitle="نسخة خفيفة ممتعة: لفّ، اشترى، ادفع إيجار، وابنِ ثروة."
+          meta="طويلة"
           onClick={() => {
             const tokens: BankStartPayload["token"][] = ["🚗", "🏎️", "🚕", "🛻"];
             const start: BankStartPayload = {
@@ -235,6 +367,7 @@ export function GameHubInline({
         <HubButton
           title="🃏 كوتشينة: حرب"
           subtitle="كل واحد يسحب ورقة… الأعلى يكسب نقطة."
+          meta="سريعة"
           onClick={() => {
             const start: CardsStartPayload = {
               kind: "cards_start",
@@ -250,6 +383,7 @@ export function GameHubInline({
         <HubButton
           title="🃏 كوتشينة: أعلى ورقة"
           subtitle="جولة واحدة سريعة: ورقة وخلصنا."
+          meta="سريعة"
           onClick={() => {
             const start: CardsStartPayload = {
               kind: "cards_start",

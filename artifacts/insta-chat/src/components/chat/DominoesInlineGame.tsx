@@ -86,6 +86,20 @@ const DominoBone = ({ a, b, isVertical = true, inverted = false, playable = fals
   );
 };
 
+const DominoBack = ({ compact = false }: { compact?: boolean }) => (
+  <div
+    className={[
+      "rounded-md border border-[#b8ab85] bg-gradient-to-br from-[#f7efd8] to-[#d8ccb0]",
+      "shadow-[0_2px_4px_rgba(0,0,0,0.35),inset_0_1px_1px_rgba(255,255,255,0.7)] relative overflow-hidden",
+      compact ? "w-4 h-8 sm:w-5 sm:h-10" : "w-5 h-10 sm:w-6 sm:h-12",
+    ].join(" ")}
+  >
+    <div className="absolute inset-[2px] rounded-[4px] border border-[#8c7e5a]/40" />
+    <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_#8c7e5a_0%,_transparent_60%)]" />
+    <div className="absolute inset-x-[28%] top-[12%] bottom-[12%] rounded-full border border-[#9f916c]/50" />
+  </div>
+);
+
 
 export function DominoesInlineGame({ gameMessage, otherUserId, conversationId, allMessages }: { gameMessage: Message; otherUserId: string; conversationId: string; allMessages: Message[] }) {
   const me = useMe((s) => s.username).toLowerCase();
@@ -108,7 +122,7 @@ export function DominoesInlineGame({ gameMessage, otherUserId, conversationId, a
   const state = useMemo(() => {
     if (!start) return null;
     const p1 = start.createdBy.toLowerCase();
-    const p2 = otherUserId.toLowerCase();
+    const p2 = p1 === me ? otherUserId.toLowerCase() : me;
     const allBones = makeDominoes();
     const rnd = xorshift32(hashSeed(`dominoes:${start.gameId}`));
     for (let i = allBones.length - 1; i > 0; i--) {
@@ -219,7 +233,7 @@ export function DominoesInlineGame({ gameMessage, otherUserId, conversationId, a
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#2d1b11] overflow-hidden w-[310px] sm:w-[380px] shadow-2xl relative font-sans">
+    <div className="rounded-2xl border border-white/10 bg-[#2d1b11] overflow-hidden w-full shadow-2xl relative font-sans">
       {/* Wood Texture Overlay */}
       <div className="absolute inset-0 opacity-30 mix-blend-overlay pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')]" />
 
@@ -232,17 +246,19 @@ export function DominoesInlineGame({ gameMessage, otherUserId, conversationId, a
 
       {/* Opponent's Hand */}
       <div className="bg-black/40 px-3 py-2 flex items-center justify-between relative z-10 border-b border-white/5">
-        <div className="text-[11px] text-[#aaa] font-medium">أحجار الخصم: {oppHandCount}</div>
-        <div className="flex gap-1">
+        <div className="text-[11px] text-[#ddd] font-medium">أحجار الخصم: {oppHandCount}</div>
+        <div className="flex items-end gap-1.5 min-h-[42px]">
           {Array.from({ length: Math.min(oppHandCount, 7) }).map((_, i) => (
-            <div key={i} className="w-3 h-5 bg-gradient-to-b from-[#fefae0] to-[#e6dfc8] rounded-[3px] shadow-[0_2px_4px_rgba(0,0,0,0.5)] border border-black/40" />
+            <div key={i} className={i % 2 ? "translate-y-1" : ""}>
+              <DominoBack compact />
+            </div>
           ))}
           {oppHandCount > 7 && <span className="text-white text-[11px] ml-1 font-bold">+{oppHandCount - 7}</span>}
         </div>
       </div>
 
       {/* Playing Board Area (Green Felt) */}
-      <div className="h-[140px] sm:h-[160px] bg-gradient-to-br from-[#1a3822] to-[#0f2414] p-3 overflow-x-auto flex items-center shadow-[inset_0_5px_15px_rgba(0,0,0,0.6)] relative custom-scrollbar">
+      <div className="h-[150px] sm:h-[170px] bg-gradient-to-br from-[#1f4d2d] to-[#102816] p-3 overflow-x-auto flex items-center shadow-[inset_0_5px_15px_rgba(0,0,0,0.6)] relative custom-scrollbar">
         <div className="absolute inset-0 opacity-40 mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/felt.png')]" />
         
         <div className="flex items-center gap-1 min-w-max px-4 relative z-10 mx-auto transition-all duration-300">
@@ -255,7 +271,7 @@ export function DominoesInlineGame({ gameMessage, otherUserId, conversationId, a
               const [a, b] = state.allBones[item.index];
               const isDouble = a === b;
               return (
-                <div key={i} className="flex-shrink-0 drop-shadow-xl animate-in fade-in slide-in-from-bottom-2">
+              <div key={i} className="flex-shrink-0 drop-shadow-xl animate-in fade-in slide-in-from-bottom-2">
                   {/* Doubles are traditionally played vertically, others horizontally */}
                   <DominoBone a={a} b={b} isVertical={isDouble} inverted={item.inverted} />
                 </div>
@@ -291,7 +307,7 @@ export function DominoesInlineGame({ gameMessage, otherUserId, conversationId, a
               else if (a === state.leftEnd || b === state.leftEnd || a === state.rightEnd || b === state.rightEnd) playable = true;
             }
             return (
-              <div key={idx} onClick={() => playable && playBone(idx)}>
+              <div key={idx} onClick={() => playable && playBone(idx)} className={playable ? "" : "opacity-90"}>
                 <DominoBone a={a} b={b} isVertical={true} playable={playable} />
               </div>
             );

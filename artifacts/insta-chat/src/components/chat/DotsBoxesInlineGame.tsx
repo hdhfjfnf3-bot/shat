@@ -45,7 +45,7 @@ export function DotsBoxesInlineGame({
   const state = useMemo(() => {
     if (!start) return null;
     const p1 = start.createdBy.toLowerCase();
-    const p2 = otherUserId.toLowerCase();
+    const p2 = p1 === me ? otherUserId.toLowerCase() : me;
     
     const lines = new Set<string>();
     const boxes = new Map<string, string>(); // boxId -> owner
@@ -150,7 +150,7 @@ export function DotsBoxesInlineGame({
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0f172a] overflow-hidden w-[280px] sm:w-[320px] shadow-xl">
+    <div className="rounded-2xl border border-white/10 bg-[#0f172a] overflow-hidden w-full shadow-xl">
       <div className="bg-[#1e293b] px-3 py-2 flex justify-between items-center border-b border-white/10">
         <div className="font-bold text-white text-[13px]">✍️ نقط ومربعات</div>
         <div className="text-[11px] text-[#ddd]">

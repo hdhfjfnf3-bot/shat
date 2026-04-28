@@ -4,14 +4,22 @@ import { useMe } from "@/lib/me";
 import { MessageBubble } from "./MessageBubble";
 
 /* ── Typing indicator ──────────────────────────────────────────── */
-const TypingIndicator = memo(function TypingIndicator() {
+const TypingIndicator = memo(function TypingIndicator({ avatarUrl }: { avatarUrl?: string }) {
   return (
-    <div className="flex items-end gap-2 mr-1 mb-1">
-      <div className="w-7 h-7 rounded-full bg-white/10 shrink-0" />
-      <div className="bg-[#1e1e1e] border border-white/[0.06] rounded-2xl px-4 py-3 flex items-center gap-1.5">
+    <div className="flex items-end gap-2 px-3 mb-1">
+      {avatarUrl && (
+        <img src={avatarUrl} className="w-[28px] h-[28px] rounded-full object-cover shrink-0" />
+      )}
+      <div
+        className="bg-[#1e1e1e] border border-white/[0.08] rounded-[22px] rounded-bl-[4px] px-4 py-3 flex items-center gap-1.5"
+        style={{ animation: "bubblePop 0.15s cubic-bezier(.34,1.3,.64,1) both" }}
+      >
         {[0, 160, 320].map((d) => (
-          <span key={d} className="w-1.5 h-1.5 rounded-full bg-[#555] inline-block"
-            style={{ animation: `typingBounce 1.2s ease-in-out ${d}ms infinite` }} />
+          <span
+            key={d}
+            className="w-[7px] h-[7px] rounded-full bg-[#888] inline-block"
+            style={{ animation: `typingBounce 1.2s ease-in-out ${d}ms infinite` }}
+          />
         ))}
       </div>
     </div>
@@ -21,9 +29,9 @@ const TypingIndicator = memo(function TypingIndicator() {
 /* ── Date separator ─────────────────────────────────────────────── */
 function DateSep({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3 my-3 px-4">
+    <div className="flex items-center gap-3 my-4 px-4">
       <div className="flex-1 h-px bg-white/[0.05]" />
-      <span className="text-[11px] text-[#444] font-medium">{label}</span>
+      <span className="text-[12px] text-[#737373] font-medium">{label}</span>
       <div className="flex-1 h-px bg-white/[0.05]" />
     </div>
   );
@@ -33,14 +41,15 @@ function formatDay(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
   if (d.toDateString() === now.toDateString()) return "اليوم";
-  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
   if (d.toDateString() === yesterday.toDateString()) return "أمس";
   return d.toLocaleDateString("ar-EG", { weekday: "long", month: "short", day: "numeric" });
 }
 
 /* ── Thread ─────────────────────────────────────────────────────── */
 export function Thread({ activeId }: { activeId: string }) {
-  const username = useMe((s) => s.username);
+  const username  = useMe((s) => s.username);
   const messages  = useChatStore((s) => s.messages[activeId] ?? []);
   const conv      = useChatStore((s) => s.conversations[activeId]);
   const isTyping  = useChatStore((s) => s.typingPeers[activeId] ?? false);
@@ -49,52 +58,52 @@ export function Thread({ activeId }: { activeId: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  /* Scroll to bottom */
+  /* Scroll to bottom on mount / conversation switch */
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) { el.scrollTop = el.scrollHeight; }
+    if (el) el.scrollTop = el.scrollHeight;
   }, [activeId]);
 
+  /* Smart scroll on new messages */
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
-    if (nearBottom) {
-      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-    }
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
+    if (nearBottom) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages.length, isTyping]);
 
-  /* Build items with date separators */
+  /* Build item list with date separators */
   const items: Array<{ type: "sep"; label: string } | { type: "msg"; idx: number }> = [];
   let lastDay = "";
   messages.forEach((msg, idx) => {
-    // Hide game move payloads so they don't clutter the chat history!
+    // Skip game move payloads (show only start/hub messages)
     if (msg.type === "game") {
       try {
         const payload = JSON.parse(msg.content);
-        if (payload && payload.kind && !payload.kind.endsWith("_start") && payload.kind !== "hub") {
-          return; // Skip rendering this message
-        }
+        if (payload?.kind && !payload.kind.endsWith("_start") && payload.kind !== "hub") return;
       } catch {}
     }
-
     const day = formatDay(msg.createdAt);
     if (day !== lastDay) { items.push({ type: "sep", label: day }); lastDay = day; }
     items.push({ type: "msg", idx });
   });
 
   return (
-    <div 
-      ref={scrollRef} 
-      className={`flex-1 overflow-y-auto px-2 py-3 flex flex-col gap-[2px] transition-colors duration-500 ${vanishMode ? "bg-black" : "bg-transparent"}`}
+    <div
+      ref={scrollRef}
+      className={`flex-1 overflow-y-auto py-2 flex flex-col transition-colors duration-500 ${vanishMode ? "bg-black" : "bg-transparent"}`}
     >
       {/* Empty state */}
       {messages.length === 0 && !vanishMode && (
         <div className="flex flex-col items-center justify-center flex-1 gap-4 py-20">
-          <img src={otherUser?.avatarUrl} className="w-20 h-20 rounded-full ring-4 ring-white/10" alt="" />
+          <img
+            src={otherUser?.avatarUrl}
+            className="w-20 h-20 rounded-full ring-2 ring-white/10"
+            alt=""
+          />
           <div className="text-center">
             <p className="font-bold text-white text-[17px]">{otherUser?.displayName || otherUser?.username}</p>
-            <p className="text-[#444] text-[13px] mt-1">قل مرحبا! 👋</p>
+            <p className="text-[#737373] text-[13px] mt-1">قل مرحبا! 👋</p>
           </div>
         </div>
       )}
@@ -124,16 +133,18 @@ export function Thread({ activeId }: { activeId: string }) {
         const isFirst = !prev || prev.senderId !== msg.senderId;
         const isLast  = !next || next.senderId !== msg.senderId;
 
-        /* Bubble shape for RTL */
+        /* Bubble border-radius (top-left, top-right, bottom-right, bottom-left) */
         let br = "22px";
         if (isOwn) {
-          if (!isFirst && !isLast) br = "4px 22px 22px 4px";       // Middle
-          else if (!isFirst && isLast) br = "4px 22px 22px 22px";  // Bottom
-          else if (isFirst && !isLast) br = "22px 22px 22px 4px";  // Top
+          // Own: sharp corner is bottom-right (connecting to the tail/group below)
+          if (!isFirst && !isLast) br = "22px 4px 4px 22px";   // middle
+          else if (!isFirst && isLast)  br = "22px 4px 22px 22px";  // last of group
+          else if (isFirst && !isLast)  br = "22px 22px 4px 22px";  // first of group
         } else {
-          if (!isFirst && !isLast) br = "22px 4px 4px 22px";       // Middle
-          else if (!isFirst && isLast) br = "22px 4px 22px 22px";  // Bottom
-          else if (isFirst && !isLast) br = "22px 22px 4px 22px";  // Top
+          // Other: sharp corner is bottom-left
+          if (!isFirst && !isLast) br = "4px 22px 22px 4px";   // middle
+          else if (!isFirst && isLast)  br = "4px 22px 22px 22px";  // last of group
+          else if (isFirst && !isLast)  br = "22px 22px 22px 4px";  // first of group
         }
 
         return (
@@ -152,8 +163,8 @@ export function Thread({ activeId }: { activeId: string }) {
         );
       })}
 
-      {isTyping && <TypingIndicator />}
-      <div ref={bottomRef} />
+      {isTyping && <TypingIndicator avatarUrl={otherUser?.avatarUrl} />}
+      <div ref={bottomRef} className="h-2" />
     </div>
   );
 }

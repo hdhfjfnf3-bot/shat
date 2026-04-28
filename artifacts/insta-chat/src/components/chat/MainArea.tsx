@@ -114,72 +114,67 @@ export function MainArea({ activeId }: { activeId: string | null }) {
         />
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07] bg-black/80 backdrop-blur-md z-10 shrink-0">
-        <div className="flex items-center gap-3">
+      {/* Header — Instagram Direct style */}
+      <div className="flex items-center justify-between px-1 py-2 border-b border-white/[0.07] bg-black/90 backdrop-blur-md z-10 shrink-0">
+        <div className="flex items-center gap-1">
           {/* Back (mobile) */}
           <button
             onClick={() => setLocation("/")}
-            className="md:hidden w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1"
+            className="md:hidden w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors text-white"
           >
-            <ChevronRight className="w-6 h-6 stroke-[1.5]" />
+            <ChevronRight className="w-6 h-6 stroke-[2]" />
           </button>
 
           {/* Avatar + name — clickable to open InfoPanel */}
           <button
-            className="flex items-center gap-3 hover:opacity-80 transition-opacity text-right"
+            className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
             onClick={() => setShowInfo(true)}
           >
             <div className="relative">
               <img
                 src={otherUser?.avatarUrl}
-                className="w-10 h-10 rounded-full object-cover ring-2 ring-white/10"
+                className="w-[38px] h-[38px] rounded-full object-cover"
                 alt={otherUser?.username}
               />
               {otherUser?.isOnline && (
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#00d26a] rounded-full border-2 border-black" />
+                <span className="absolute bottom-0 right-0 w-[11px] h-[11px] bg-[#00d26a] rounded-full border-2 border-black" />
               )}
             </div>
-            <div className="flex flex-col text-right">
-              <div className="font-semibold text-[15px] text-white leading-tight">
+            <div className="flex flex-col items-start">
+              <div className="font-semibold text-[15px] text-white leading-tight tracking-tight">
                 {otherUser?.displayName || otherUser?.username}
               </div>
-              <div className="text-[12px] text-[#555] flex items-center justify-end gap-1.5 mt-0.5">
-                {otherUser?.isOnline ? (
-                  <><span className="w-1.5 h-1.5 rounded-full bg-[#00d26a] inline-block" />نشط الآن</>
-                ) : "نشط منذ 5 دقائق"}
+              <div className="text-[12px] text-[#737373] mt-[1px]">
+                {otherUser?.isOnline ? "نشط الآن" : "نشط منذ 5 دقائق"}
               </div>
             </div>
           </button>
         </div>
 
         {/* Header actions */}
-        <div className="flex items-center gap-1 text-white">
+        <div className="flex items-center gap-0.5 text-white">
           <button
             aria-label="مكالمة صوتية"
-            title="مكالمة صوتية"
             onClick={() => setCalling("audio")}
-            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
           >
-            <Phone className="w-5 h-5 stroke-[1.5]" />
+            <Phone className="w-[22px] h-[22px] stroke-[1.5]" />
           </button>
           <button
             aria-label="مكالمة فيديو"
-            title="مكالمة فيديو"
             onClick={() => setCalling("video")}
-            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
           >
-            <Video className="w-5 h-5 stroke-[1.5]" />
+            <Video className="w-[22px] h-[22px] stroke-[1.5]" />
           </button>
-          
+
           <EmojiStylePicker align="left" />
           <button
             aria-label="معلومات"
-            title="معلومات"
             onClick={() => setShowInfo(true)}
-            className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${showInfo ? "bg-white/15 text-white" : "hover:bg-white/10"}`}
+            className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${showInfo ? "bg-white/15" : "hover:bg-white/10"}`}
           >
-            <Info className="w-5 h-5 stroke-[1.5]" />
+            <Info className="w-[22px] h-[22px] stroke-[1.5]" />
           </button>
         </div>
       </div>

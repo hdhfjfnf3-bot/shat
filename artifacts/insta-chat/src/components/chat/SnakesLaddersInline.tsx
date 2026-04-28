@@ -129,7 +129,7 @@ export function SnakesLaddersInline({ gameMessage, otherUserId, conversationId, 
   const BOARD_CELLS = Array.from({ length: 100 }, (_, i) => i + 1);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0f0f0f] overflow-hidden sm:w-[360px] w-[310px] shadow-2xl font-sans relative">
+    <div className="rounded-2xl border border-white/10 bg-[#0f0f0f] overflow-hidden w-full shadow-2xl font-sans relative">
       
       {/* Top Banner */}
       <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 p-3 flex justify-between items-center shadow-md relative z-10">

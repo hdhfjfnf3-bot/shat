@@ -257,7 +257,7 @@ export const MessageBubble = memo(function MessageBubble({
             {/* ── Bubble ────────────────────────────────────────────── */}
             <div
               onClick={handleTap}
-              className={`relative select-none cursor-pointer active:scale-[0.98] transition-transform ${
+              className={`relative select-none cursor-pointer ${
                 msg.type === "like" || isOnlyEmoji
                   ? "text-[36px]"
                   : msg.type === "image" || msg.type === "video"
@@ -266,10 +266,10 @@ export const MessageBubble = memo(function MessageBubble({
                       ? `px-3 py-2.5 ${isOwn ? `${themeClass} text-white` : "bg-[#1e1e1e] border border-white/[0.1]"}`
                       : msg.type === "game" || msg.type === "poll"
                         ? "p-0 overflow-hidden"
-                        : `px-[14px] py-[9px] text-[15px] shadow-lg shadow-black/10 border ${
+                        : `px-[14px] py-[9px] text-[15px] shadow-sm shadow-black/5 border ${
                             isOwn
-                              ? `${themeClass} border-white/20 text-white`
-                              : "bg-[#181818]/80 backdrop-blur-md border-white/10 text-[#fafafa]"
+                              ? `${themeClass} border-white/10 text-white`
+                              : "bg-[#262626] border-white/5 text-[#fafafa]"
                           }`
               } leading-[1.35] break-words whitespace-pre-wrap`}
               style={{

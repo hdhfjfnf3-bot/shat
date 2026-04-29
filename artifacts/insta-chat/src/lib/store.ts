@@ -17,6 +17,7 @@ type RealtimeAdapter = {
   reactMessage?: (peer: string, messageId: string, emoji: string) => boolean;
   unsendMessage?: (peer: string, messageId: string) => boolean;
   sendTyping?: (to: string, isTyping: boolean) => void;
+  sendInChat?: (to: string, inChat: boolean) => void;
   sendRead?: (to: string) => void;
   deleteConversation?: (to: string) => void;
   editMessage?: (peer: string, messageId: string, content: string) => boolean;
@@ -29,6 +30,7 @@ export function setRealtimeAdapter(a: RealtimeAdapter) {
   realtime.reactMessage = a.reactMessage;
   realtime.unsendMessage = a.unsendMessage;
   realtime.sendTyping = a.sendTyping;
+  realtime.sendInChat = a.sendInChat;
   realtime.sendRead = a.sendRead;
   realtime.deleteConversation = a.deleteConversation;
   realtime.editMessage = a.editMessage;
@@ -36,6 +38,10 @@ export function setRealtimeAdapter(a: RealtimeAdapter) {
 
 export function sendTypingSignal(to: string, isTyping: boolean) {
   realtime.sendTyping?.(to, isTyping);
+}
+
+export function sendInChatSignal(to: string, inChat: boolean) {
+  realtime.sendInChat?.(to, inChat);
 }
 
 interface ChatState {
@@ -46,6 +52,7 @@ interface ChatState {
   replyingTo: Record<string, string | null>;
   editingMessageId: Record<string, string | null>;
   typingPeers: Record<string, boolean>;
+  inChatPeers: Record<string, boolean>;
   setActiveConversation: (id: string | null) => void;
   setVanishMode: (conversationId: string, isOn: boolean) => void;
   sendMessage: (conversationId: string, content: string, type?: "text" | "image" | "video" | "like" | "voice" | "game" | "theme" | "vanish_mode" | "poll", replyToId?: string, voice?: VoiceMeta, poll?: import("./types").PollMeta) => void;
@@ -64,6 +71,7 @@ interface ChatState {
   ensureConversation: (peerUsername: string) => string;
   createConversation: (username: string) => string;
   setTyping: (peerUsername: string, isTyping: boolean) => void;
+  setInChat: (peerUsername: string, inChat: boolean) => void;
   deleteConversation: (conversationId: string) => void;
   toggleMute: (conversationId: string) => void;
   clearAll: () => void;
@@ -97,6 +105,7 @@ export const useChatStore = create<ChatState>()(
       replyingTo: {},
       editingMessageId: {},
       typingPeers: {},
+      inChatPeers: {},
 
       setVanishMode: (conversationId, isOn) => {
         set((state) => ({
@@ -124,6 +133,11 @@ export const useChatStore = create<ChatState>()(
           sounds.playTyping();
         }
         set((state) => ({ typingPeers: { ...state.typingPeers, [p]: isTyping } }));
+      },
+
+      setInChat: (peer, inChat) => {
+        const p = peer.toLowerCase();
+        set((state) => ({ inChatPeers: { ...state.inChatPeers, [p]: inChat } }));
       },
 
       setActiveConversation: (id) => {
@@ -504,12 +518,18 @@ export const useChatStore = create<ChatState>()(
       },
 
       clearAll: () => {
-        set({ conversations: {}, messages: {}, activeConversationId: null, replyingTo: {}, typingPeers: {} });
+        set({ conversations: {}, messages: {}, activeConversationId: null, replyingTo: {}, typingPeers: {}, inChatPeers: {} });
       },
     }),
     {
       name: "ig-direct-storage",
-      version: 4,
+      version: 5, // increment version
+      partialize: (state) => ({
+        conversations: state.conversations,
+        vanishMode: state.vanishMode,
+        // We EXCLUDE `messages` from persistence because JSON.stringify on thousands of messages
+        // blocks the main thread and causes UI lag/hanging. Supabase handles message history.
+      }),
       migrate: () => ({
         conversations: {},
         messages: {},
@@ -517,6 +537,7 @@ export const useChatStore = create<ChatState>()(
         replyingTo: {},
         editingMessageId: {},
         typingPeers: {},
+        inChatPeers: {},
       }) as any,
     },
   ),

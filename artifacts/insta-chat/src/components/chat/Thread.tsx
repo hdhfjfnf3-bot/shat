@@ -123,17 +123,16 @@ export function Thread({ activeId }: { activeId: string }) {
   }, [messages, username]);
 
   useEffect(() => {
-    if (isTyping && virtuoso.current) {
-      virtuoso.current.scrollToIndex({ index: "LAST", behavior: "smooth" });
+    if (isTyping && virtuoso.current && items.length > 0) {
+      virtuoso.current.scrollToIndex({ index: items.length - 1, behavior: "smooth" });
     }
-  }, [isTyping]);
+  }, [isTyping, items.length]);
 
   useEffect(() => {
     if (virtuoso.current && items.length > 0) {
-      // Small timeout ensures Virtuoso has rendered the new items before scrolling
       const timer = setTimeout(() => {
-        virtuoso.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" });
-      }, 50);
+        virtuoso.current?.scrollToIndex({ index: items.length - 1, behavior: "smooth" });
+      }, 100);
       return () => clearTimeout(timer);
     }
   }, [items.length]);
@@ -145,7 +144,7 @@ export function Thread({ activeId }: { activeId: string }) {
         className="flex-1 hide-scrollbar"
         data={items}
         initialTopMostItemIndex={items.length > 0 ? items.length - 1 : 0}
-        followOutput="smooth"
+        followOutput="auto"
         alignToBottom={true}
         components={{
           Header: () => (

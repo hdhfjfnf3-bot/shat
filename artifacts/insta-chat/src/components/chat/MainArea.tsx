@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useChatStore } from "@/lib/store";
+import { useChatStore, sendInChatSignal } from "@/lib/store";
 import { ChevronRight, Phone, Video, Info, MessageCircle, Mic } from "lucide-react";
 import { useLocation } from "wouter";
 import { Thread } from "./Thread";
@@ -59,7 +59,7 @@ function CallOverlay({ type, user, onEnd }: { type: "audio" | "video"; user: any
 
 export function MainArea({ activeId }: { activeId: string | null }) {
   const [, setLocation] = useLocation();
-  const { conversations } = useChatStore();
+  const { conversations, inChatPeers } = useChatStore();
   const activeConv = activeId ? conversations[activeId] : null;
   const otherUser = activeConv?.participants[0];
   const isGroup = activeConv?.isGroup;
@@ -67,6 +67,16 @@ export function MainArea({ activeId }: { activeId: string | null }) {
   const headerAvatar = isGroup ? `https://ui-avatars.com/api/?name=${encodeURIComponent(headerTitle)}&background=262626&color=fff` : otherUser?.avatarUrl;
   const [showInfo, setShowInfo] = useState(false);
   const [calling, setCalling] = useState<"audio" | "video" | null>(null);
+
+  // Broadcast in_chat status
+  useEffect(() => {
+    if (activeId && !isGroup) {
+      sendInChatSignal(activeId, true);
+      return () => {
+        sendInChatSignal(activeId, false);
+      };
+    }
+  }, [activeId, isGroup]);
 
   /* ── Empty state ─────────────────────────────────────────────── */
   if (!activeId || !activeConv) {
@@ -163,7 +173,7 @@ export function MainArea({ activeId }: { activeId: string | null }) {
                 {isGroup && <span className="bg-white/10 text-white/50 text-[10px] px-1.5 py-0.5 rounded-md">مجموعة</span>}
               </div>
               <div className="text-[12px] text-[#737373] mt-[1px]">
-                {isGroup ? `${activeConv.participants.length} أعضاء` : (otherUser?.isOnline ? "نشط الآن" : "نشط منذ 5 دقائق")}
+                {isGroup ? `${activeConv.participants.length} أعضاء` : (inChatPeers[otherUser?.username || ""] ? "في الدردشة الآن" : (otherUser?.isOnline ? "نشط الآن" : "نشط منذ 5 دقائق"))}
               </div>
             </div>
           </button>

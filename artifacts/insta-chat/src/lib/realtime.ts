@@ -102,6 +102,9 @@ export function useRealtime() {
         .on("broadcast", { event: "vanish_msg" }, (p) => {
           useChatStore.getState().ingestRemoteMessage(peer, p.payload);
         })
+        .on("broadcast", { event: "in_chat" }, (p) => {
+          if (p.payload?.to === me) useChatStore.getState().setInChat(p.payload.from, p.payload.inChat);
+        })
         .subscribe((status) => {
           if (status === "SUBSCRIBED" && !channelMap.current.has(key)) {
             channelMap.current.set(key, ch);
@@ -216,6 +219,14 @@ export function useRealtime() {
         const ch = channelMap.current.get(key);
         if (ch) {
           ch.send({ type: "broadcast", event: "typing", payload: { from: me, to, isTyping } });
+        }
+      },
+
+      sendInChat: (to, inChat) => {
+        const key = roomKey(me, to);
+        const ch = channelMap.current.get(key);
+        if (ch) {
+          ch.send({ type: "broadcast", event: "in_chat", payload: { from: me, to, inChat } });
         }
       },
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Search, Edit, Smile, Check, X, UserX, Loader2, ArrowLeft, LogOut } from "lucide-react";
 import { useLocation } from "wouter";
 import { useChatStore } from "@/lib/store";

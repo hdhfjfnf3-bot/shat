@@ -8,7 +8,7 @@ export default function Inbox() {
   const activeId = matchT ? paramsT.id : matchId ? paramsId.id : null;
 
   return (
-    <div className="flex h-[100dvh] text-white overflow-hidden font-sans relative" style={{ background: '#0e1117' }}>
+    <div className="fixed inset-0 flex text-white overflow-hidden font-sans bg-[#0e1117]">
       {/* ── Soft ambient gradient (zero GPU cost) ── */}
       <div 
         className="absolute inset-0 pointer-events-none opacity-30 z-0"

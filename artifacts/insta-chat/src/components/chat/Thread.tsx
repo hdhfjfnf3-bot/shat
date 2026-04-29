@@ -128,14 +128,25 @@ export function Thread({ activeId }: { activeId: string }) {
     }
   }, [isTyping]);
 
+  useEffect(() => {
+    if (virtuoso.current && items.length > 0) {
+      // Small timeout ensures Virtuoso has rendered the new items before scrolling
+      const timer = setTimeout(() => {
+        virtuoso.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [items.length]);
+
   return (
-    <div className={`flex-1 flex flex-col transition-colors duration-500 overflow-hidden ${vanishMode ? "bg-black" : "bg-transparent"}`}>
+    <div className={`flex-1 min-h-0 flex flex-col transition-colors duration-500 overflow-hidden ${vanishMode ? "bg-black" : "bg-transparent"}`}>
       <Virtuoso
         ref={virtuoso}
         className="flex-1 hide-scrollbar"
         data={items}
-        initialTopMostItemIndex={items.length - 1}
-        followOutput="auto"
+        initialTopMostItemIndex={items.length > 0 ? items.length - 1 : 0}
+        followOutput="smooth"
+        alignToBottom={true}
         components={{
           Header: () => (
             <>

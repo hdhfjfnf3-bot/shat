@@ -203,7 +203,7 @@ export const MessageBubble = memo(function MessageBubble({
 
       <div
         ref={wrapRef}
-        className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-[6px]" : "mt-[2px]"} px-3 relative group ${animClass}`}
+        className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-[10px]" : "mt-[2px]"} px-4 relative group ${animClass}`}
         style={{
           ...originStyle,
           transform: swipeX !== 0 ? `translateX(${swipeX}px)` : undefined,
@@ -219,22 +219,31 @@ export const MessageBubble = memo(function MessageBubble({
 
         {/* Other user avatar */}
         {!isOwn && isLastInGroup && (
-          <div className="w-[28px] ml-2 flex-shrink-0 flex items-end pb-[2px]">
-            <img src={otherUser?.avatarUrl} className="w-[28px] h-[28px] rounded-full object-cover" />
+          <div className="w-[30px] mr-2 flex-shrink-0 flex items-end pb-[2px]">
+            <img src={otherUser?.avatarUrl} className="w-[30px] h-[30px] rounded-full object-cover" alt="" />
           </div>
         )}
-        {!isOwn && !isLastInGroup && <div className="w-[36px] flex-shrink-0" />}
+        {!isOwn && !isLastInGroup && <div className="w-[38px] flex-shrink-0" />}
 
-        <div className={`flex flex-col ${isOwn ? "items-end" : "items-start"} ${msg.type === "game" ? "max-w-[90%] sm:max-w-[80%] md:max-w-[60%]" : "max-w-[75%]"} relative`}>
+        <div className={`flex flex-col ${isOwn ? "items-end" : "items-start"} ${msg.type === "game" ? "max-w-[90%] sm:max-w-[80%] md:max-w-[60%]" : "max-w-[72%]"} relative`}>
 
-          {/* Reply preview — shown ABOVE the bubble */}
+          {/* Reply preview */}
           {replyTo && (
-            <div className={`mb-1 max-w-full flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
-              <span className="text-[11px] text-[#737373] mb-0.5 px-1">
-                {isOwn ? "ردّيت" : `ردّ ${otherUser?.displayName ?? ""}`}
-              </span>
-              <div className="px-3.5 py-1.5 text-[13px] rounded-[18px] bg-[#1a1a1a] border border-white/[0.08] text-[#a8a8a8] max-w-full truncate">
-                <EmojiText text={replyTo.content} size={13} />
+            <div className={`mb-1.5 max-w-full flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
+              <div
+                className="px-3 py-1.5 text-[12px] rounded-[12px] max-w-full"
+                style={{
+                  background: isOwn ? 'rgba(167,139,250,0.1)' : 'rgba(79,124,247,0.1)',
+                  borderLeft: isOwn ? 'none' : '2px solid rgba(79,124,247,0.5)',
+                  borderRight: isOwn ? '2px solid rgba(167,139,250,0.5)' : 'none',
+                }}
+              >
+                <span className="text-[10px] font-bold block mb-0.5" style={{ color: isOwn ? '#a78bfa' : '#6fa3f7' }}>
+                  {isOwn ? "ردّيت" : `ردّ ${otherUser?.displayName ?? ""}`}
+                </span>
+                <span className="text-[#7d8fa0] truncate block max-w-[200px]">
+                  <EmojiText text={replyTo.content} size={12} />
+                </span>
               </div>
             </div>
           )}
@@ -257,26 +266,26 @@ export const MessageBubble = memo(function MessageBubble({
               onClick={handleTap}
               className={`relative select-none cursor-pointer ${
                 msg.type === "like" || isOnlyEmoji
-                  ? "text-[36px]"
+                  ? "text-[40px]"
                   : msg.type === "image" || msg.type === "video"
                     ? "p-0 overflow-hidden"
                     : msg.type === "voice"
-                      ? `px-3 py-2.5 ${isOwn ? themeClass + " text-white" : "text-[#e8ecf4]"}`
+                      ? `px-3 py-2.5 ${isOwn ? themeClass + " text-white" : "text-[#dde6f0]"}`
                       : msg.type === "game" || msg.type === "poll"
                         ? "p-0 overflow-hidden"
-                        : `px-[14px] py-[9px] text-[15px] ${
+                        : `px-[15px] py-[10px] text-[15px] font-[450] ${
                             isOwn
                               ? `${themeClass} text-white`
-                              : "text-[#e8ecf4]"
+                              : "text-[#dde6f0]"
                           }`
-              } leading-[1.35] break-words whitespace-pre-wrap`}
+              } leading-[1.5] break-words whitespace-pre-wrap`}
               style={{
                 borderRadius:
                   (msg.type === "like" || isOnlyEmoji) ? "0"
                   : (msg.type === "image" || msg.type === "video" || msg.type === "game") ? "22px"
                   : borderRadius,
                 ...(!isOwn && msg.type !== "like" && msg.type !== "image" && msg.type !== "video" && msg.type !== "game" && msg.type !== "poll" && !isOnlyEmoji
-                  ? { background: '#1e2535' }
+                  ? { background: '#1c2640' }
                   : {}),
               }}
               dir="auto"
@@ -378,12 +387,12 @@ export const MessageBubble = memo(function MessageBubble({
 
           {/* Reaction chips */}
           {reactionEntries.length > 0 && (
-            <div className={`flex ${isOwn ? "justify-end" : "justify-start"} -mt-2 z-[50] ${isOwn ? "pr-2" : "pl-2"} relative`}>
-              <div className="bg-[#262626] border border-white/[0.08] rounded-full px-2 py-[3px] flex items-center gap-1 text-[13px] shadow cursor-pointer hover:bg-[#333] transition-colors">
+            <div className={`flex ${isOwn ? "justify-end" : "justify-start"} -mt-2.5 z-[50] ${isOwn ? "pr-3" : "pl-3"} relative`}>
+              <div className="rounded-full px-2.5 py-[4px] flex items-center gap-1 text-[13px] cursor-pointer" style={{ background: '#1f2d45', border: '1px solid rgba(255,255,255,0.06)' }}>
                 {reactionEntries.map(([emoji, count]) => (
-                  <button key={emoji} onClick={() => onReact(emoji)} className="flex items-center gap-0.5 active:scale-90 transition-transform">
-                    <EmojiText text={emoji} size={13} />
-                    {count > 1 && <span className="text-[11px] text-[#a8a8a8] font-medium">{count}</span>}
+                  <button key={emoji} onClick={() => onReact(emoji)} className="flex items-center gap-0.5">
+                    <EmojiText text={emoji} size={14} />
+                    {count > 1 && <span className="text-[11px] font-semibold" style={{ color: '#7ba7f7' }}>{count}</span>}
                   </button>
                 ))}
               </div>
@@ -392,9 +401,9 @@ export const MessageBubble = memo(function MessageBubble({
 
           {/* Delivery status — only for own last message */}
           {isOwn && isLastInGroup && isLastOverall && (
-            <div className="text-[11px] text-[#737373] mt-[3px] pr-1 font-medium animate-in fade-in duration-300 flex items-center gap-1">
-              {msg.status === "sending" ? "جاري الإرسال..." : msg.status === "sent" ? "أُرسلت" : msg.status === "delivered" ? "وصلت" : "مقروءة"}
-              {msg.isEdited && <span className="text-[10px] bg-white/5 px-1 rounded-sm text-[#555]">عدّلت</span>}
+            <div className="text-[11px] mt-[3px] pr-1 flex items-center gap-1" style={{ color: '#4a6fa5' }}>
+              {msg.status === "sending" ? "جاري الإرسال..." : msg.status === "sent" ? "✓ أُرسلت" : msg.status === "delivered" ? "✓✓ وصلت" : "✓✓ مقروءة"}
+              {msg.isEdited && <span className="text-[10px] px-1.5 py-0.5 rounded-full text-[#4a6fa5]" style={{ background: 'rgba(79,124,247,0.1)' }}>عدّلت</span>}
             </div>
           )}
         </div>

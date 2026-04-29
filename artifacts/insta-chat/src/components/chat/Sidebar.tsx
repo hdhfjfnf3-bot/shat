@@ -6,6 +6,7 @@ import { useMe } from "@/lib/me";
 import { useEmojiStyle, EMOJI_STYLE_OPTIONS } from "@/lib/emojiStyle";
 import { EmojiText } from "./EmojiText";
 import { checkUserExists } from "@/lib/auth";
+import { CURRENT_USER } from "@/lib/types";
 
 /* ── debounce ───────────────────────────────────────────────────── */
 function debounce<T extends (...a: any[]) => any>(fn: T, ms: number): T {
@@ -22,6 +23,21 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
   const { style, setStyle } = useEmojiStyle();
   const username  = useMe((s) => s.username);
   const clearAuth = useMe((s) => s.clearAuth);
+  const messagesStore = useChatStore((s) => s.messages);
+
+  const eligibleFriends = useMemo(() => {
+    const friends = new Set<string>();
+    Object.values(conversations).forEach(conv => {
+      if (!conv.isGroup && conv.participants.length > 0) {
+        const otherUser = conv.participants[0].username;
+        const msgs = messagesStore[conv.id] || [];
+        const iSent = msgs.some(m => m.senderId === CURRENT_USER.id);
+        const theySent = msgs.some(m => m.senderId !== CURRENT_USER.id);
+        if (iSent && theySent) friends.add(otherUser);
+      }
+    });
+    return Array.from(friends);
+  }, [conversations, messagesStore]);
 
 
   /* State */
@@ -77,15 +93,7 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
   };
   const closeModal = () => { setShowNewChat(false); setNewName(""); setCheckState("idle"); setFoundUser(null); setChatMode("single"); setGroupName(""); setGroupMembers([]); };
   
-  const handleAddMember = () => {
-    if (checkState === "found" && foundUser && groupMembers.length < 20 && !groupMembers.includes(foundUser)) {
-      setGroupMembers(prev => [...prev, foundUser]);
-      setNewName("");
-      setCheckState("idle");
-      setFoundUser(null);
-      inputRef.current?.focus();
-    }
-  };
+  const handleAddMember = () => {}; // Replaced by direct inline toggle
 
   /* Emoji picker outside click */
   useEffect(() => {
@@ -262,80 +270,97 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
               </button>
             </div>
 
-            {/* Input */}
+            {/* Input Area */}
             <div className="px-5 pt-4 pb-3">
-              {chatMode === "group" && (
-                <div className="mb-4">
-                  <label className="text-[11px] text-[#555] font-semibold uppercase tracking-wider block mb-2">اسم المجموعة</label>
-                  <div className="border-b-2 border-white/20 focus-within:border-[#0095f6] pb-2 transition-colors">
-                    <input value={groupName} onChange={(e) => setGroupName(e.target.value)}
-                      placeholder="اكتب اسم الجروب..."
-                      className="bg-transparent outline-none text-white text-[15px] w-full placeholder:text-[#444]"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <label className="text-[11px] text-[#555] font-semibold uppercase tracking-wider block mb-3">
-                {chatMode === "group" ? `إضافة عضو (${groupMembers.length}/20)` : "إلى"}
-              </label>
-              
-              {chatMode === "group" && groupMembers.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {groupMembers.map(m => (
-                    <div key={m} className="bg-[#0095f6]/20 text-[#0095f6] text-[12px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                      {m}
-                      <button onClick={() => setGroupMembers(prev => prev.filter(x => x !== m))} className="hover:text-white"><X className="w-3 h-3" /></button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className={`flex items-center gap-2 border-b-2 pb-2 transition-colors ${
-                checkState === "found" ? "border-[#00d26a]" : checkState === "notfound" ? "border-[#ed4956]" : "border-white/20 focus-within:border-[#0095f6]"}`}>
-                <span className="text-[#555]">@</span>
-                <input ref={inputRef} value={newName} onChange={(e) => setNewName(e.target.value)}
-                  onKeyDown={(e) => { 
-                    if (e.key === "Enter") {
-                      if (chatMode === "single") handleCreate();
-                      else handleAddMember();
-                    }
-                    if (e.key === "Escape") closeModal(); 
-                  }}
-                  placeholder="اسم المستخدم"
-                  disabled={chatMode === "group" && groupMembers.length >= 20}
-                  className="bg-transparent outline-none text-white text-[15px] flex-1 placeholder:text-[#444] disabled:opacity-50"
-                  autoComplete="off" spellCheck={false} dir="ltr" />
-                <Badge />
-              </div>
-
-              {/* Not found error */}
-              {checkState === "notfound" && newName.trim().length >= 2 && (
-                <div className="mt-3 flex items-start gap-2 bg-[#ed4956]/10 border border-[#ed4956]/25 rounded-xl px-3.5 py-3">
-                  <UserX className="w-4 h-4 text-[#ed4956] shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-[13px] text-[#ed4956] font-semibold">المستخدم غير موجود</p>
-                    <p className="text-[12px] text-[#555] mt-0.5">تحقق من الاسم وحاول مجدداً. ربما لم يسجّل بعد.</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Found user card */}
-              {checkState === "found" && foundUser && (
-                <div className="mt-3 flex items-center justify-between bg-[#00d26a]/10 border border-[#00d26a]/25 rounded-xl px-3.5 py-3">
-                  <div className="flex items-center gap-3">
-                    <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(foundUser)}&background=random&color=fff&size=150`} className="w-9 h-9 rounded-full ring-2 ring-[#00d26a]/30" alt="" />
-                    <div>
-                      <p className="text-[13px] text-white font-semibold">{foundUser}</p>
-                      <p className="text-[12px] text-[#00d26a]">جاهز للدردشة ✓</p>
+              {chatMode === "group" ? (
+                <>
+                  <div className="mb-4">
+                    <label className="text-[11px] text-[#555] font-semibold uppercase tracking-wider block mb-2">اسم المجموعة</label>
+                    <div className="border-b-2 border-white/20 focus-within:border-[#0095f6] pb-2 transition-colors">
+                      <input value={groupName} onChange={(e) => setGroupName(e.target.value)}
+                        placeholder="اكتب اسم الجروب..."
+                        className="bg-transparent outline-none text-white text-[15px] w-full placeholder:text-[#444]"
+                      />
                     </div>
                   </div>
-                  {chatMode === "group" && !groupMembers.includes(foundUser) && (
-                    <button onClick={handleAddMember} className="bg-[#00d26a] text-black text-[12px] font-bold px-3 py-1.5 rounded-lg hover:bg-[#00b85c] transition-colors">
-                      إضافة
-                    </button>
+
+                  <label className="text-[11px] text-[#555] font-semibold uppercase tracking-wider block mb-2">
+                    إضافة عضو ({groupMembers.length}/20)
+                  </label>
+                  
+                  {eligibleFriends.length === 0 ? (
+                    <div className="text-[13px] text-[#a8a8a8] bg-white/5 border border-white/10 rounded-xl p-4 text-center leading-relaxed">
+                      لا يوجد أصدقاء مؤهلين 😔<br/>
+                      <span className="text-[12px] text-[#737373]">يجب أن تتواصل مع شخص في محادثة فردية ويرد عليك أولاً لتتمكن من إضافته لمجموعة.</span>
+                    </div>
+                  ) : (
+                    <div className="max-h-[220px] overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                      {eligibleFriends.map(friend => {
+                        const isSelected = groupMembers.includes(friend);
+                        return (
+                          <button 
+                            key={friend}
+                            onClick={() => {
+                              if (isSelected) setGroupMembers(prev => prev.filter(x => x !== friend));
+                              else if (groupMembers.length < 20) setGroupMembers(prev => [...prev, friend]);
+                            }}
+                            className="flex items-center justify-between w-full p-2.5 rounded-xl hover:bg-white/[0.06] transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(friend)}&background=random&color=fff&size=150`} className="w-9 h-9 rounded-full" alt="" />
+                              <span className="text-[14px] text-white font-medium">{friend}</span>
+                            </div>
+                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${isSelected ? "bg-[#0095f6] border-[#0095f6]" : "border-white/20"}`}>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
-                </div>
+                </>
+              ) : (
+                <>
+                  <label className="text-[11px] text-[#555] font-semibold uppercase tracking-wider block mb-3">إلى</label>
+                  
+                  <div className={`flex items-center gap-2 border-b-2 pb-2 transition-colors ${
+                    checkState === "found" ? "border-[#00d26a]" : checkState === "notfound" ? "border-[#ed4956]" : "border-white/20 focus-within:border-[#0095f6]"}`}>
+                    <span className="text-[#555]">@</span>
+                    <input ref={inputRef} value={newName} onChange={(e) => setNewName(e.target.value)}
+                      onKeyDown={(e) => { 
+                        if (e.key === "Enter") handleCreate();
+                        if (e.key === "Escape") closeModal(); 
+                      }}
+                      placeholder="اسم المستخدم"
+                      className="bg-transparent outline-none text-white text-[15px] flex-1 placeholder:text-[#444]"
+                      autoComplete="off" spellCheck={false} dir="ltr" />
+                    <Badge />
+                  </div>
+
+                  {/* Not found error */}
+                  {checkState === "notfound" && newName.trim().length >= 2 && (
+                    <div className="mt-3 flex items-start gap-2 bg-[#ed4956]/10 border border-[#ed4956]/25 rounded-xl px-3.5 py-3">
+                      <UserX className="w-4 h-4 text-[#ed4956] shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-[13px] text-[#ed4956] font-semibold">المستخدم غير موجود</p>
+                        <p className="text-[12px] text-[#555] mt-0.5">تحقق من الاسم وحاول مجدداً. ربما لم يسجّل بعد.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Found user card */}
+                  {checkState === "found" && foundUser && (
+                    <div className="mt-3 flex items-center justify-between bg-[#00d26a]/10 border border-[#00d26a]/25 rounded-xl px-3.5 py-3">
+                      <div className="flex items-center gap-3">
+                        <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(foundUser)}&background=random&color=fff&size=150`} className="w-9 h-9 rounded-full ring-2 ring-[#00d26a]/30" alt="" />
+                        <div>
+                          <p className="text-[13px] text-white font-semibold">{foundUser}</p>
+                          <p className="text-[12px] text-[#00d26a]">جاهز للدردشة ✓</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 

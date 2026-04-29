@@ -353,28 +353,30 @@ export function Composer({ activeId }: { activeId: string }) {
               >
                 <Dices className="w-[26px] h-[26px] stroke-[1.5]" />
               </button>
-              <button
-                onClick={() => {
-                  const q = window.prompt("اكتب سؤال التصويت:");
-                  if (!q) return;
-                  const optsStr = window.prompt("اكتب الخيارات مفصولة بفاصلة (مثال: نعم، لا):");
-                  if (!optsStr) return;
-                  const opts = optsStr.split(",").map(s => s.trim()).filter(Boolean);
-                  if (opts.length < 2) return alert("يجب إدخال خيارين على الأقل");
-                  
-                  const pollMeta = {
-                    question: q,
-                    options: opts.map((text, i) => ({ id: `opt_${i}`, text, votes: [] })),
-                    multipleAnswers: false,
-                  };
-                  sendMessage(activeId, "", "poll", undefined, undefined, pollMeta);
-                }}
-                className="w-9 h-9 flex items-center justify-center rounded-full text-white hover:text-[#a8a8a8] transition-colors"
-                aria-label="تصويت"
-                title="إنشاء تصويت"
-              >
-                <BarChart2 className="w-[26px] h-[26px] stroke-[1.5]" />
-              </button>
+              {conv?.isGroup && (
+                <button
+                  onClick={() => {
+                    const q = window.prompt("اكتب سؤال التصويت:");
+                    if (!q) return;
+                    const optsStr = window.prompt("اكتب الخيارات مفصولة بفاصلة (مثال: نعم، لا):");
+                    if (!optsStr) return;
+                    const opts = optsStr.split(",").map(s => s.trim()).filter(Boolean);
+                    if (opts.length < 2) return alert("يجب إدخال خيارين على الأقل");
+                    
+                    const pollMeta = {
+                      question: q,
+                      options: opts.map((text, i) => ({ id: `opt_${i}`, text, votes: [] })),
+                      multipleAnswers: false,
+                    };
+                    sendMessage(activeId, "", "poll", undefined, undefined, pollMeta);
+                  }}
+                  className="w-9 h-9 flex items-center justify-center rounded-full text-white hover:text-[#a8a8a8] transition-colors"
+                  aria-label="تصويت"
+                  title="إنشاء تصويت"
+                >
+                  <BarChart2 className="w-[26px] h-[26px] stroke-[1.5]" />
+                </button>
+              )}
               <button
                 className="w-9 h-9 flex items-center justify-center rounded-full text-white active:scale-90 hover:text-[#ed4956] transition-colors"
                 onClick={() => sendMessage(activeId, "❤️", "like")}

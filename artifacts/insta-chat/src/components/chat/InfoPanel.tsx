@@ -76,7 +76,7 @@ export function InfoPanel({ user, conversationId, onClose }: Props) {
 
       {/* Panel */}
       <div
-        className="fixed left-0 top-0 bottom-0 z-[160] w-full max-w-[320px] bg-[#0d0d0d]/80 backdrop-blur-3xl border-r border-white/[0.07] flex flex-col overflow-hidden"
+        className="fixed left-0 top-0 bottom-0 z-[160] w-full max-w-[320px] bg-[#0a0a0a]/90 backdrop-blur-md border-r border-white/[0.07] flex flex-col overflow-hidden"
         style={{ animation: "panelIn 0.22s cubic-bezier(.34,1.2,.64,1) both" }}
       >
         {/* Header */}

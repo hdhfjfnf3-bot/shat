@@ -128,7 +128,7 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
   /* ─────────────────────────────────────────────────────────── */
   return (
     <>
-      <div className={`w-full md:w-[360px] flex flex-col border-l border-white/[0.06] bg-black/40 backdrop-blur-3xl shrink-0 z-10 ${activeId ? "hidden md:flex" : "flex"}`}>
+      <div className={`w-full md:w-[360px] flex flex-col border-l border-white/[0.06] bg-[#0a0a0a]/70 backdrop-blur-md shrink-0 z-10 ${activeId ? "hidden md:flex" : "flex"}`}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-8 pb-3">

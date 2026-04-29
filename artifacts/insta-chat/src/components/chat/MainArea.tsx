@@ -129,7 +129,7 @@ export function MainArea({ activeId }: { activeId: string | null }) {
       )}
 
       {/* Header — Instagram Direct style */}
-      <div className="flex items-center justify-between px-2 py-2.5 border-b border-white/[0.04] bg-black/40 backdrop-blur-3xl z-10 shrink-0 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
+      <div className="flex items-center justify-between px-2 py-2.5 border-b border-white/[0.04] bg-[#0a0a0a]/70 backdrop-blur-md z-10 shrink-0 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
         <div className="flex items-center gap-1">
           {/* Back (mobile) */}
           <button

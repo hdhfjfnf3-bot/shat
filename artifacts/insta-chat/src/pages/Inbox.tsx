@@ -8,15 +8,15 @@ export default function Inbox() {
   const activeId = matchT ? paramsT.id : matchId ? paramsId.id : null;
 
   return (
-    <div className="flex h-[100dvh] bg-[#050505] text-white overflow-hidden font-sans relative">
-      {/* ── Ultra-Fast 90 FPS Ambient Background ── */}
+    <div className="flex h-[100dvh] text-white overflow-hidden font-sans relative" style={{ background: '#0e1117' }}>
+      {/* ── Soft ambient gradient (zero GPU cost) ── */}
       <div 
-        className="absolute inset-0 pointer-events-none opacity-20 z-0"
+        className="absolute inset-0 pointer-events-none opacity-30 z-0"
         style={{
           background: `
-            radial-gradient(circle at 10% 10%, rgba(131, 58, 180, 0.4) 0%, transparent 40%),
-            radial-gradient(circle at 90% 90%, rgba(55, 151, 240, 0.4) 0%, transparent 40%),
-            radial-gradient(circle at 60% 40%, rgba(255, 8, 68, 0.3) 0%, transparent 30%)
+            radial-gradient(ellipse at 0% 0%, rgba(79, 124, 247, 0.2) 0%, transparent 50%),
+            radial-gradient(ellipse at 100% 100%, rgba(155, 106, 240, 0.18) 0%, transparent 50%),
+            radial-gradient(ellipse at 100% 0%, rgba(55, 175, 200, 0.08) 0%, transparent 40%)
           `
         }}
       />

@@ -24,7 +24,6 @@
   --color-accent-foreground:  hsl(var(--accent-foreground));
   --color-destructive:        hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
-  /* Cairo = أجمل خط عربي على الإنترنت */
   --font-sans: 'Cairo', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --radius-sm:  4px;
   --radius-md:  8px;
@@ -33,23 +32,23 @@
 }
 
 :root {
-  --background:   0 0% 0%;
-  --foreground:   0 0% 98%;
-  --border:       0 0% 10%;
-  --input:        0 0% 10%;
-  --ring:         240 5.9% 10%;
-  --card:         0 0% 5%;
-  --card-foreground: 0 0% 98%;
-  --popover:      0 0% 12%;
-  --popover-foreground: 0 0% 98%;
-  --primary:      0 0% 98%;
-  --primary-foreground: 0 0% 9%;
-  --secondary:    0 0% 12%;
-  --secondary-foreground: 0 0% 98%;
-  --muted:        0 0% 12%;
-  --muted-foreground: 0 0% 55%;
-  --accent:       0 0% 12%;
-  --accent-foreground: 0 0% 98%;
+  --background:   222 20% 7%;
+  --foreground:   210 20% 95%;
+  --border:       220 15% 13%;
+  --input:        220 15% 13%;
+  --ring:         220 15% 20%;
+  --card:         222 20% 9%;
+  --card-foreground: 210 20% 95%;
+  --popover:      222 20% 11%;
+  --popover-foreground: 210 20% 95%;
+  --primary:      210 20% 95%;
+  --primary-foreground: 222 20% 7%;
+  --secondary:    222 15% 13%;
+  --secondary-foreground: 210 20% 95%;
+  --muted:        222 15% 13%;
+  --muted-foreground: 220 10% 50%;
+  --accent:       222 15% 16%;
+  --accent-foreground: 210 20% 95%;
   --destructive:  0 62.8% 30.6%;
   --destructive-foreground: 0 0% 98%;
 }
@@ -65,75 +64,86 @@ html, body, #root {
   height: 100dvh;
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeSpeed;
 }
 
-/* ─── Scrollbars — مخفية مثل انستجرام ───────────────────────────── */
+/* ─── GPU-accelerated scroll container ──────────────────────────── */
+.virtuoso-scroller {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* ─── Scrollbars ─────────────────────────────────────────────────── */
 * { scrollbar-width: none; }
 *::-webkit-scrollbar { display: none; }
 
-/* ─── Premium Calm Gradient ─────────────────────────────────────────── */
+/* ─── Gradient classes ───────────────────────────────────────────── */
 .ig-gradient {
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background: linear-gradient(135deg, #4f7cf7, #9b6af0);
 }
 .ig-gradient-text {
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background: linear-gradient(135deg, #4f7cf7, #9b6af0);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-/* ─── Micro-animation: bubble pop (GPU only) ─────────────────────── */
+/* ─── Bubble pop — GPU only (transform + opacity) ───────────────── */
 @keyframes bubblePop {
-  0%   { opacity: 0; transform: scale(0.92) translateY(4px); }
+  0%   { opacity: 0; transform: scale(0.94) translateY(6px); }
   100% { opacity: 1; transform: scale(1)    translateY(0); }
 }
 .ig-pop {
-  animation: bubblePop 0.14s cubic-bezier(.34,1.3,.64,1) both;
+  animation: bubblePop 0.18s cubic-bezier(.34,1.3,.64,1) both;
   will-change: transform, opacity;
 }
 
-/* ─── Smooth Message Entry ───────────────────────────────────────── */
+/* ─── Message entry animation ────────────────────────────────────── */
 @keyframes messageIn {
-  0% { opacity: 0; transform: translateY(15px) scale(0.95); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  0%   { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 .animate-messageIn {
-  animation: messageIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.15) forwards;
+  animation: messageIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   will-change: transform, opacity;
 }
 
+/* ─── Heart reaction ─────────────────────────────────────────────── */
 @keyframes heartBeat {
-  0% { transform: scale(0.8); opacity: 0; }
-  50% { transform: scale(1.15); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  0%   { transform: scale(0.7); opacity: 0; }
+  50%  { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1);   opacity: 1; }
 }
 .animate-heartBeat {
-  animation: heartBeat 0.35s cubic-bezier(.34,1.4,.64,1) both;
+  animation: heartBeat 0.3s cubic-bezier(.34,1.4,.64,1) both;
 }
 
 /* ─── Typing dots ────────────────────────────────────────────────── */
 @keyframes typingBounce {
-  0%, 60%, 100% { transform: translateY(0);   opacity: .35; }
+  0%, 60%, 100% { transform: translateY(0);   opacity: .4; }
   30%            { transform: translateY(-5px); opacity: 1; }
 }
 
 /* ─── Modal slide-in ─────────────────────────────────────────────── */
 @keyframes modalIn {
-  from { opacity: 0; transform: scale(0.94) translateY(10px); }
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
   to   { opacity: 1; transform: scale(1)    translateY(0); }
 }
 @keyframes panelIn {
   from { opacity: 0; transform: translateX(-100%); }
   to   { opacity: 1; transform: translateX(0); }
 }
-/* RTL: info panel slides from left */
-[dir="rtl"] .panel-slide {
-  animation: panelIn 0.22s cubic-bezier(.34,1.1,.64,1) both;
-}
 
 /* ─── RTL utilities ──────────────────────────────────────────────── */
 [dir="rtl"] .ltr-only { direction: ltr; }
 
-/* ─── Smooth tap highlight off ───────────────────────────────────── */
+/* ─── Tap highlight off ──────────────────────────────────────────── */
 * { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
+
+/* ─── Smooth button transitions (GPU only) ───────────────────────── */
+button {
+  transition: opacity 0.15s ease;
+}
+button:active { opacity: 0.7; }

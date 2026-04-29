@@ -261,13 +261,13 @@ export const MessageBubble = memo(function MessageBubble({
                   : msg.type === "image" || msg.type === "video"
                     ? "p-0 overflow-hidden"
                     : msg.type === "voice"
-                      ? `px-3 py-2.5 ${isOwn ? `${themeClass} text-white` : "bg-[#1e1e1e] border border-white/[0.1]"}`
+                      ? `px-3 py-2.5 ${isOwn ? themeClass + " text-white" : "text-[#e8ecf4]"}`
                       : msg.type === "game" || msg.type === "poll"
                         ? "p-0 overflow-hidden"
-                        : `px-[14px] py-[9px] text-[15px] shadow-sm shadow-black/5 border ${
+                        : `px-[14px] py-[9px] text-[15px] ${
                             isOwn
-                              ? `${themeClass} border-white/10 text-white`
-                              : "bg-[#262626] border-white/5 text-[#fafafa]"
+                              ? `${themeClass} text-white`
+                              : "text-[#e8ecf4]"
                           }`
               } leading-[1.35] break-words whitespace-pre-wrap`}
               style={{
@@ -275,6 +275,9 @@ export const MessageBubble = memo(function MessageBubble({
                   (msg.type === "like" || isOnlyEmoji) ? "0"
                   : (msg.type === "image" || msg.type === "video" || msg.type === "game") ? "22px"
                   : borderRadius,
+                ...(!isOwn && msg.type !== "like" && msg.type !== "image" && msg.type !== "video" && msg.type !== "game" && msg.type !== "poll" && !isOnlyEmoji
+                  ? { background: '#1e2535' }
+                  : {}),
               }}
               dir="auto"
             >

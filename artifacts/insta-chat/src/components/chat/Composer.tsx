@@ -187,7 +187,7 @@ export function Composer({ activeId }: { activeId: string }) {
 
   /* ═══════════════════════════════════════════════════════════ */
   return (
-    <div className="px-2 pb-4 pt-1 shrink-0 bg-black/60 backdrop-blur-2xl relative border-t border-white/[0.04] z-10" ref={wrapRef}>
+    <div className="px-2 pb-4 pt-1 shrink-0 relative border-t border-white/[0.05] z-10" style={{ background: '#0c1018' }} ref={wrapRef}>
 
       {/* Emoji Picker */}
       {showPicker && (
@@ -288,7 +288,7 @@ export function Composer({ activeId }: { activeId: string }) {
           </button>
 
           {/* Input pill */}
-          <div className="flex-1 min-w-0 flex items-end bg-white/[0.04] border border-white/[0.08] rounded-[26px] px-4 py-[7px] gap-2 relative focus-within:bg-white/[0.08] focus-within:border-white/20 focus-within:ring-4 focus-within:ring-white/[0.03] transition-all duration-300">
+          <div className="flex-1 min-w-0 flex items-end rounded-[26px] px-4 py-[7px] gap-2 relative focus-within:ring-2 focus-within:ring-[#4f7cf7]/30 transition-all duration-200" style={{ background: '#1a2035' }}>
             <textarea
               ref={taRef}
               value={inputText}

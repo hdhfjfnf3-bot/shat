@@ -1,6 +1,7 @@
 import { useEffect, useRef, memo, useMemo } from "react";
 import { useChatStore } from "@/lib/store";
 import { useMe } from "@/lib/me";
+import { Message } from "@/lib/types";
 import { MessageBubble } from "./MessageBubble";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 
@@ -57,6 +58,32 @@ export function Thread({ activeId }: { activeId: string }) {
   const vanishMode = useChatStore((s) => s.vanishMode[activeId] ?? false);
   const otherUser = conv?.participants[0];
   const virtuoso = useRef<VirtuosoHandle>(null);
+
+  /* Compute theme once for ALL messages */
+  const themeClass = useMemo(() => {
+    const themeMsg = [...messages].reverse().find(m => m.type === "theme");
+    const id = themeMsg?.content || "default";
+    const map: Record<string, string> = {
+      default:    "bg-gradient-to-br from-[#3797f0] to-[#833ab4]",
+      monochrome: "bg-gradient-to-br from-[#444444] to-[#111111]",
+      ocean:      "bg-gradient-to-br from-[#00c6ff] to-[#0072ff]",
+      love:       "bg-gradient-to-br from-[#ff0844] to-[#ffb199]",
+      cyberpunk:  "bg-gradient-to-br from-[#f000ff] to-[#00d4ff]",
+      forest:     "bg-gradient-to-br from-[#11998e] to-[#38ef7d]",
+      halloween:  "bg-gradient-to-br from-[#ff8c00] to-[#e52e71]",
+      sunset:     "bg-gradient-to-br from-[#fc4a1a] to-[#f7b733]",
+      aurora:     "bg-gradient-to-br from-[#00b09b] to-[#96c93d]",
+      royal:      "bg-gradient-to-br from-[#141E30] to-[#243B55]",
+    };
+    return map[id] || map["default"];
+  }, [messages]);
+
+  /* Build a replyId->msg lookup map to avoid O(n) find in each bubble */
+  const msgById = useMemo(() => {
+    const map = new Map<string, Message>();
+    messages.forEach(m => map.set(m.id, m));
+    return map;
+  }, [messages]);
 
   /* Build item list with date separators and precalculated styles */
   const items = useMemo(() => {
@@ -155,6 +182,7 @@ export function Thread({ activeId }: { activeId: string }) {
               otherUser={otherUser}
               conversationId={activeId}
               allMessages={messages}
+              themeClass={themeClass}
               isGroup={conv?.isGroup}
               participants={conv?.participants || []}
             />

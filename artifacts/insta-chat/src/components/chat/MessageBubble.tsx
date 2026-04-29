@@ -46,6 +46,7 @@ interface Props {
   otherUser?: User;
   conversationId: string;
   allMessages: Message[];
+  themeClass: string;
   isGroup?: boolean;
   participants?: User[];
 }
@@ -63,7 +64,7 @@ const themeColorsMap: Record<string, string> = {
 
 export const MessageBubble = memo(function MessageBubble({
   msg, isOwn, isFirstInGroup, isLastInGroup, isLastOverall,
-  borderRadius, otherUser, conversationId, allMessages, isGroup, participants
+  borderRadius, otherUser, conversationId, allMessages, themeClass, isGroup, participants
 }: Props) {
   const { toggleReaction, unsendMessage, setReplyingTo, setEditingMessage } = useChatStore();
   const [showActions, setShowActions] = useState(false);
@@ -150,10 +151,7 @@ export const MessageBubble = memo(function MessageBubble({
     return count > 0 && count <= 3;
   }, [msg]);
 
-  /* ── Current theme ─────────────────────────────────────────────── */
-  const currentThemeMsg = allMessages ? [...allMessages].reverse().find(m => m.type === "theme") : undefined;
-  const currentThemeId = currentThemeMsg?.content || "default";
-  const themeClass = themeColorsMap[currentThemeId] || themeColorsMap["default"];
+  /* themeClass comes from Thread (computed once for all bubbles) */
 
   /* ── Unsent ─────────────────────────────────────────────────────── */
   if (msg.isUnsent) {

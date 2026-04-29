@@ -40,11 +40,13 @@ export function FastTapInline({
   otherUserId,
   conversationId,
   allMessages,
+  participants,
 }: {
   gameMessage: Message;
   otherUserId: string;
   conversationId: string;
   allMessages: Message[];
+  participants?: import("@/lib/types").User[];
 }) {
   const me = useMe((s) => s.username).toLowerCase();
   const { sendMessage } = useChatStore();
@@ -52,28 +54,42 @@ export function FastTapInline({
   const start = useMemo(() => safeJsonParse<StartPayload>(gameMessage.content), [gameMessage.content]);
   const gameId = start?.kind === "fasttap_start" ? start.gameId : null;
 
+  const allPlayers = useMemo(() => {
+    if (!participants || participants.length === 0) {
+      const p1 = start?.createdBy.toLowerCase() || "";
+      const p2 = p1 === me ? otherUserId.toLowerCase() : me;
+      return [p1, p2];
+    }
+    const set = new Set<string>();
+    set.add(start?.createdBy.toLowerCase() || "");
+    participants.forEach((p) => set.add(p.username.toLowerCase()));
+    set.add(me);
+    return Array.from(set).sort();
+  }, [participants, start?.createdBy, me, otherUserId]);
+
   const state = useMemo(() => {
-    if (!gameId) return { my: 0, other: 0 };
-    let my = 0;
-    let other = 0;
+    const scores: Record<string, number> = {};
+    for (const p of allPlayers) scores[p] = 0;
+    
+    if (!gameId) return { scores, resetAt: 0 };
     let resetAt = 0;
+    
     for (const m of allMessages) {
       if (m.type !== "game") continue;
       const p = safeJsonParse<Payload>(m.content);
       if (!p || p.gameId !== gameId) continue;
       if (p.kind === "fasttap_reset") {
         resetAt++;
-        my = 0;
-        other = 0;
+        for (const p of allPlayers) scores[p] = 0;
       }
       if (p.kind === "fasttap_tap") {
         const by = p.by.toLowerCase();
-        if (by === me) my++;
-        else if (by === otherUserId.toLowerCase()) other++;
+        if (scores[by] !== undefined) scores[by]++;
+        else scores[by] = 1;
       }
     }
-    return { my, other, resetAt };
-  }, [allMessages, gameId, me, otherUserId]);
+    return { scores, resetAt };
+  }, [allMessages, gameId, allPlayers]);
 
   if (!start || !gameId) {
     return (
@@ -93,8 +109,16 @@ export function FastTapInline({
     sendMessage(conversationId, JSON.stringify(payload), "game");
   };
 
-  const lead =
-    state.my === state.other ? "تعادل" : state.my > state.other ? "إنت متقدم" : "الطرف التاني متقدم";
+  const topScore = Math.max(...Object.values(state.scores));
+  const leaders = Object.entries(state.scores).filter(([, score]) => score === topScore && score > 0).map(([p]) => p);
+  
+  const lead = leaders.length === 0 
+    ? "لسه محدش ضغط" 
+    : leaders.length > 1 
+      ? "تعادل بين: " + leaders.map(p => p === me ? "أنت" : p).join(" و ")
+      : leaders[0] === me 
+        ? "أنت متقدم!" 
+        : `${leaders[0]} متقدم!`;
 
   return (
     <div className="rounded-2xl border border-white/10 bg-[#111] overflow-hidden">
@@ -104,15 +128,16 @@ export function FastTapInline({
       </div>
 
       <div className="p-3 space-y-3">
-        <div className="grid grid-cols-2 gap-2 text-[12px]">
-          <div className="rounded-xl border border-white/10 bg-black/30 p-2">
-            <div className="text-white/60 mb-1">إنت</div>
-            <div className="text-white font-black text-[18px]">{state.my}</div>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-black/30 p-2">
-            <div className="text-white/60 mb-1">الطرف التاني</div>
-            <div className="text-white font-black text-[18px]">{state.other}</div>
-          </div>
+        <div className="grid grid-cols-2 gap-2 text-[12px] max-h-32 overflow-y-auto hide-scrollbar">
+          {allPlayers.map((p) => {
+            const isLeader = leaders.includes(p) && topScore > 0;
+            return (
+              <div key={p} className={`rounded-xl border ${isLeader ? "border-[#00d26a] bg-[#00d26a]/10" : "border-white/10 bg-black/30"} p-2 transition-all`}>
+                <div className="text-white/60 mb-1 truncate" title={p}>{p === me ? "أنت" : p}</div>
+                <div className={`font-black text-[18px] ${isLeader ? "text-[#00d26a]" : "text-white"}`}>{state.scores[p] ?? 0}</div>
+              </div>
+            );
+          })}
         </div>
 
         <button

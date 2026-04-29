@@ -70,11 +70,13 @@ export function SpinWheelInline({
   otherUserId,
   conversationId,
   allMessages,
+  participants,
 }: {
   gameMessage: Message;
   otherUserId: string;
   conversationId: string;
   allMessages: Message[];
+  participants?: import("@/lib/types").User[];
 }) {
   const me = useMe((s) => s.username).toLowerCase();
   const { sendMessage } = useChatStore();
@@ -109,9 +111,21 @@ export function SpinWheelInline({
   const pickedIndex = seed % items.length;
   const picked = items[pickedIndex]!;
 
-  const p1 = start.createdBy.toLowerCase();
-  const p2 = p1 === me ? otherUserId.toLowerCase() : me;
-  const myTurn = (spins % 2 === 0 ? p1 : p2) === me;
+  const allPlayers = useMemo(() => {
+    if (!participants || participants.length === 0) {
+      const p1 = start?.createdBy.toLowerCase() || "";
+      const p2 = p1 === me ? otherUserId.toLowerCase() : me;
+      return [p1, p2];
+    }
+    const set = new Set<string>();
+    set.add(start?.createdBy.toLowerCase() || "");
+    participants.forEach((p) => set.add(p.username.toLowerCase()));
+    set.add(me);
+    return Array.from(set).sort();
+  }, [participants, start?.createdBy, me, otherUserId]);
+
+  const currentTurnPlayer = allPlayers[spins % allPlayers.length];
+  const myTurn = currentTurnPlayer === me;
 
   const spin = () => {
     if (!myTurn || spinning) return;
@@ -133,7 +147,7 @@ export function SpinWheelInline({
       <div className="p-3 bg-gradient-to-r from-rose-500/20 to-indigo-500/20">
         <div className="text-[13px] font-black text-white">🎡 عجلة الحظ</div>
         <div className="text-[11px] text-white/70 mt-0.5">
-          بريسِت: {start.preset} • {myTurn ? "دورك" : "دور الطرف التاني"}
+          بريسِت: {start.preset} • {myTurn ? "دورك" : `دور ${currentTurnPlayer}`}
         </div>
       </div>
 

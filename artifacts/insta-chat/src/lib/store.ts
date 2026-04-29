@@ -6,9 +6,10 @@ import { sounds } from "./sounds";
 type SendMeta = {
   id: string;
   content: string;
-  type: "text" | "image" | "video" | "voice" | "like" | "game" | "theme" | "vanish_mode";
+  type: "text" | "image" | "video" | "voice" | "like" | "game" | "theme" | "vanish_mode" | "poll";
   replyToId?: string;
   voice?: VoiceMeta;
+  poll?: import("./types").PollMeta;
 };
 
 type RealtimeAdapter = {
@@ -18,6 +19,7 @@ type RealtimeAdapter = {
   sendTyping?: (to: string, isTyping: boolean) => void;
   sendRead?: (to: string) => void;
   deleteConversation?: (to: string) => void;
+  editMessage?: (peer: string, messageId: string, content: string) => boolean;
 };
 
 const realtime: RealtimeAdapter = {};
@@ -29,6 +31,7 @@ export function setRealtimeAdapter(a: RealtimeAdapter) {
   realtime.sendTyping = a.sendTyping;
   realtime.sendRead = a.sendRead;
   realtime.deleteConversation = a.deleteConversation;
+  realtime.editMessage = a.editMessage;
 }
 
 export function sendTypingSignal(to: string, isTyping: boolean) {
@@ -41,25 +44,31 @@ interface ChatState {
   vanishMode: Record<string, boolean>;
   activeConversationId: string | null;
   replyingTo: Record<string, string | null>;
+  editingMessageId: Record<string, string | null>;
   typingPeers: Record<string, boolean>;
   setActiveConversation: (id: string | null) => void;
   setVanishMode: (conversationId: string, isOn: boolean) => void;
-  sendMessage: (conversationId: string, content: string, type?: "text" | "image" | "video" | "like" | "voice" | "game" | "theme" | "vanish_mode", replyToId?: string, voice?: VoiceMeta) => void;
+  sendMessage: (conversationId: string, content: string, type?: "text" | "image" | "video" | "like" | "voice" | "game" | "theme" | "vanish_mode" | "poll", replyToId?: string, voice?: VoiceMeta, poll?: import("./types").PollMeta) => void;
   updateMessageStatus: (conversationId: string, messageId: string, status: MessageStatus) => void;
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => void;
   setReactions: (conversationId: string, messageId: string, reactions: { userId: string; emoji: string }[]) => void;
+  votePoll: (conversationId: string, messageId: string, optionId: string) => void;
+  editMessage: (conversationId: string, messageId: string, newContent: string) => void;
   unsendMessage: (conversationId: string, messageId: string) => void;
   markUnsent: (conversationId: string, messageId: string) => void;
   markAsRead: (conversationId: string) => void;
   markPeerRead: (peerUsername: string) => void;
   ingestRemoteMessage: (peerUsername: string, message: Omit<Message, "conversationId" | "status"> & { senderId: string }) => void;
   setReplyingTo: (conversationId: string, messageId: string | null) => void;
+  setEditingMessage: (conversationId: string, messageId: string | null) => void;
   ensureConversation: (peerUsername: string) => string;
   createConversation: (username: string) => string;
   setTyping: (peerUsername: string, isTyping: boolean) => void;
   deleteConversation: (conversationId: string) => void;
   toggleMute: (conversationId: string) => void;
   clearAll: () => void;
+  createGroupConversation: (name: string, usernames: string[]) => string;
+  setConversationBackground: (conversationId: string, bgImage: string | undefined, bgOpacity: number | undefined) => void;
 }
 
 function makeUser(username: string): User {
@@ -86,6 +95,7 @@ export const useChatStore = create<ChatState>()(
       vanishMode: {},
       activeConversationId: null,
       replyingTo: {},
+      editingMessageId: {},
       typingPeers: {},
 
       setVanishMode: (conversationId, isOn) => {
@@ -97,6 +107,14 @@ export const useChatStore = create<ChatState>()(
       setReplyingTo: (conversationId, messageId) => {
         set((state) => ({
           replyingTo: { ...state.replyingTo, [conversationId]: messageId },
+          editingMessageId: { ...state.editingMessageId, [conversationId]: null },
+        }));
+      },
+
+      setEditingMessage: (conversationId, messageId) => {
+        set((state) => ({
+          editingMessageId: { ...state.editingMessageId, [conversationId]: messageId },
+          replyingTo: { ...state.replyingTo, [conversationId]: null },
         }));
       },
 
@@ -141,9 +159,38 @@ export const useChatStore = create<ChatState>()(
         return id;
       },
 
-      sendMessage: (conversationId, content, type = "text", replyToId, voice) => {
+      createGroupConversation: (name, usernames) => {
+        const id = "group_" + Math.random().toString(36).slice(2, 10);
+        const participants = usernames.map(u => makeUser(u));
+        
+        const conv: Conversation = {
+          id,
+          type: "primary",
+          participants,
+          unreadCount: 0,
+          isMuted: false,
+          isPinned: false,
+          isOnline: true,
+          lastActiveAt: new Date().toISOString(),
+          isGroup: true,
+          groupName: name,
+        };
+        
+        set((state) => ({
+          conversations: { ...state.conversations, [id]: conv },
+          messages: { ...state.messages, [id]: [] },
+          activeConversationId: id,
+        }));
+        
+        return id;
+      },
+
+      sendMessage: (conversationId, content, type = "text", replyToId, voice, poll) => {
         if (get().replyingTo[conversationId]) {
           set((state) => ({ replyingTo: { ...state.replyingTo, [conversationId]: null } }));
+        }
+        if (get().editingMessageId[conversationId]) {
+          set((state) => ({ editingMessageId: { ...state.editingMessageId, [conversationId]: null } }));
         }
         const me = CURRENT_USER.username;
         const id = Math.random().toString(36).slice(2, 10);
@@ -163,6 +210,7 @@ export const useChatStore = create<ChatState>()(
           reactions: [],
           replyToId,
           voice,
+          poll,
         };
 
         set((state) => {
@@ -182,6 +230,7 @@ export const useChatStore = create<ChatState>()(
           type,
           replyToId,
           voice,
+          poll,
         });
 
         if (sent) {
@@ -238,9 +287,57 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
+      votePoll: (conversationId, messageId, optionId) => {
+        set((state) => {
+          const list = state.messages[conversationId] || [];
+          const idx = list.findIndex((m) => m.id === messageId);
+          if (idx === -1) return state;
+          
+          const msg = list[idx];
+          if (msg.type !== "poll" || !msg.poll) return state;
+
+          const me = CURRENT_USER.username;
+          let newOptions = [...msg.poll.options];
+          
+          newOptions = newOptions.map(opt => {
+            if (opt.id === optionId) {
+              if (opt.votes.includes(me)) {
+                return { ...opt, votes: opt.votes.filter(id => id !== me) };
+              } else {
+                return { ...opt, votes: [...opt.votes, me] };
+              }
+            } else if (!msg.poll!.multipleAnswers) {
+              return { ...opt, votes: opt.votes.filter(id => id !== me) };
+            }
+            return opt;
+          });
+
+          const newMsg = { ...msg, poll: { ...msg.poll, options: newOptions } };
+          const newList = [...list];
+          newList[idx] = newMsg;
+          return { messages: { ...state.messages, [conversationId]: newList } };
+        });
+      },
+
       unsendMessage: (conversationId, messageId) => {
         get().markUnsent(conversationId, messageId);
         realtime.unsendMessage?.(conversationId, messageId);
+      },
+
+      editMessage: (conversationId, messageId, newContent) => {
+        set((state) => {
+          const list = state.messages[conversationId] || [];
+          return {
+            editingMessageId: { ...state.editingMessageId, [conversationId]: null },
+            messages: {
+              ...state.messages,
+              [conversationId]: list.map((m) =>
+                m.id === messageId ? { ...m, content: newContent, isEdited: true } : m
+              ),
+            },
+          };
+        });
+        realtime.editMessage?.(conversationId, messageId, newContent);
       },
 
       markUnsent: (conversationId, messageId) => {
@@ -389,6 +486,23 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
+      setConversationBackground: (conversationId, bgImage, bgOpacity) => {
+        set((state) => {
+          const c = state.conversations[conversationId];
+          if (!c) return state;
+          return {
+            conversations: {
+              ...state.conversations,
+              [conversationId]: {
+                ...c,
+                bgImage: bgImage !== undefined ? bgImage : c.bgImage,
+                bgOpacity: bgOpacity !== undefined ? bgOpacity : c.bgOpacity,
+              }
+            }
+          };
+        });
+      },
+
       clearAll: () => {
         set({ conversations: {}, messages: {}, activeConversationId: null, replyingTo: {}, typingPeers: {} });
       },
@@ -401,6 +515,7 @@ export const useChatStore = create<ChatState>()(
         messages: {},
         activeConversationId: null,
         replyingTo: {},
+        editingMessageId: {},
         typingPeers: {},
       }) as any,
     },

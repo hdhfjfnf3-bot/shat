@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useChatStore, sendTypingSignal } from "@/lib/store";
-import { Smile, Mic, Image, Heart, X, CornerUpLeft, Trash2, Send, Dices } from "lucide-react";
+import { Smile, Mic, Image, Heart, X, CornerUpLeft, Trash2, Send, Dices, BarChart2 } from "lucide-react";
 import EmojiPicker, { Theme } from "emoji-picker-react";
 import { useEmojiStyle, EMOJI_STYLE_TO_PICKER } from "@/lib/emojiStyle";
 import { EmojiText } from "./EmojiText";
@@ -13,7 +13,7 @@ function debounce<T extends (...args: any[]) => any>(fn: T, ms: number): T {
 }
 
 export function Composer({ activeId }: { activeId: string }) {
-  const { sendMessage, replyingTo, setReplyingTo, messages, conversations } = useChatStore();
+  const { sendMessage, editMessage, replyingTo, editingMessageId, setReplyingTo, setEditingMessage, messages, conversations } = useChatStore();
   const [inputText, setInputText] = useState("");
   const [showPicker, setShowPicker] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -40,6 +40,9 @@ export function Composer({ activeId }: { activeId: string }) {
     ? replyMsg.senderId === CURRENT_USER.id ? "أنت"
       : conv?.participants.find((p) => p.id === replyMsg.senderId)?.displayName ?? "الطرف الآخر"
     : "";
+
+  const editId = editingMessageId[activeId];
+  const editMsg = editId ? (messages[activeId] || []).find((m) => m.id === editId) : null;
 
   /* ── Typing events ─────────────────────────────────────────── */
   const stopTyping = useCallback(
@@ -81,8 +84,14 @@ export function Composer({ activeId }: { activeId: string }) {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [showPicker]);
 
-  /* ── Focus textarea on reply ───────────────────────────────── */
+  /* ── Focus textarea on reply/edit ──────────────────────────── */
   useEffect(() => { if (replyMsg) taRef.current?.focus(); }, [replyId]);
+  useEffect(() => { 
+    if (editMsg && editMsg.type === "text") {
+      setInputText(editMsg.content);
+      taRef.current?.focus();
+    }
+  }, [editId, editMsg]);
 
   /* ── Cleanup on unmount ────────────────────────────────────── */
   useEffect(() => {
@@ -96,7 +105,11 @@ export function Composer({ activeId }: { activeId: string }) {
   /* ── Send text ─────────────────────────────────────────────── */
   const handleSend = () => {
     if (!inputText.trim()) return;
-    sendMessage(activeId, inputText.trim(), "text", replyId ?? undefined);
+    if (editId) {
+      editMessage(activeId, editId, inputText.trim());
+    } else {
+      sendMessage(activeId, inputText.trim(), "text", replyId ?? undefined);
+    }
     setInputText("");
     setShowPicker(false);
     if (taRef.current) taRef.current.style.height = "auto";
@@ -174,7 +187,7 @@ export function Composer({ activeId }: { activeId: string }) {
 
   /* ═══════════════════════════════════════════════════════════ */
   return (
-    <div className="px-2 pb-4 pt-1 shrink-0 bg-black relative" ref={wrapRef}>
+    <div className="px-2 pb-4 pt-1 shrink-0 bg-black/60 backdrop-blur-2xl relative border-t border-white/[0.04] z-10" ref={wrapRef}>
 
       {/* Emoji Picker */}
       {showPicker && (
@@ -204,6 +217,25 @@ export function Composer({ activeId }: { activeId: string }) {
           </div>
           <button
             onClick={() => setReplyingTo(activeId, null)}
+            className="w-6 h-6 flex items-center justify-center rounded-full text-[#555] hover:text-white transition-colors shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Edit banner */}
+      {editMsg && !recording && (
+        <div className="mb-2 mx-1 flex items-center gap-2 px-3 py-2 rounded-2xl bg-[#1a1a1a] border border-white/[0.07]">
+          <div className="w-[2px] h-8 rounded-full bg-[#00d26a] shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] text-[#00d26a] font-semibold mb-0.5">تعديل رسالة</div>
+            <div className="text-[13px] text-[#a8a8a8] truncate">
+              <EmojiText text={editMsg.content} size={13} />
+            </div>
+          </div>
+          <button
+            onClick={() => { setEditingMessage(activeId, null); setInputText(""); }}
             className="w-6 h-6 flex items-center justify-center rounded-full text-[#555] hover:text-white transition-colors shrink-0"
           >
             <X className="w-4 h-4" />
@@ -256,7 +288,7 @@ export function Composer({ activeId }: { activeId: string }) {
           </button>
 
           {/* Input pill */}
-          <div className="flex-1 min-w-0 flex items-end bg-transparent border border-[#363636] rounded-[26px] px-3 py-[7px] gap-2 relative focus-within:border-[#555] transition-colors">
+          <div className="flex-1 min-w-0 flex items-end bg-white/[0.04] border border-white/[0.08] rounded-[26px] px-4 py-[7px] gap-2 relative focus-within:bg-white/[0.08] focus-within:border-white/20 focus-within:ring-4 focus-within:ring-white/[0.03] transition-all duration-300">
             <textarea
               ref={taRef}
               value={inputText}
@@ -267,7 +299,10 @@ export function Composer({ activeId }: { activeId: string }) {
               dir="auto"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
-                if (e.key === "Escape" && replyId) setReplyingTo(activeId, null);
+                if (e.key === "Escape") {
+                  if (replyId) setReplyingTo(activeId, null);
+                  if (editId) { setEditingMessage(activeId, null); setInputText(""); }
+                }
               }}
             />
 
@@ -317,6 +352,28 @@ export function Composer({ activeId }: { activeId: string }) {
                 title="مركز الألعاب"
               >
                 <Dices className="w-[26px] h-[26px] stroke-[1.5]" />
+              </button>
+              <button
+                onClick={() => {
+                  const q = window.prompt("اكتب سؤال التصويت:");
+                  if (!q) return;
+                  const optsStr = window.prompt("اكتب الخيارات مفصولة بفاصلة (مثال: نعم، لا):");
+                  if (!optsStr) return;
+                  const opts = optsStr.split(",").map(s => s.trim()).filter(Boolean);
+                  if (opts.length < 2) return alert("يجب إدخال خيارين على الأقل");
+                  
+                  const pollMeta = {
+                    question: q,
+                    options: opts.map((text, i) => ({ id: `opt_${i}`, text, votes: [] })),
+                    multipleAnswers: false,
+                  };
+                  sendMessage(activeId, "", "poll", undefined, undefined, pollMeta);
+                }}
+                className="w-9 h-9 flex items-center justify-center rounded-full text-white hover:text-[#a8a8a8] transition-colors"
+                aria-label="تصويت"
+                title="إنشاء تصويت"
+              >
+                <BarChart2 className="w-[26px] h-[26px] stroke-[1.5]" />
               </button>
               <button
                 className="w-9 h-9 flex items-center justify-center rounded-full text-white active:scale-90 hover:text-[#ed4956] transition-colors"

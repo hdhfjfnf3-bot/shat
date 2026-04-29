@@ -57,11 +57,13 @@ export function EmojiPictionaryInline({
   otherUserId,
   conversationId,
   allMessages,
+  participants,
 }: {
   gameMessage: Message;
   otherUserId: string;
   conversationId: string;
   allMessages: Message[];
+  participants?: import("@/lib/types").User[];
 }) {
   const me = useMe((s) => s.username).toLowerCase();
   const { sendMessage } = useChatStore();
@@ -91,9 +93,20 @@ export function EmojiPictionaryInline({
 
   const seed = hashSeed(`${gameId}:${step}`);
   const prompt = PROMPTS[seed % PROMPTS.length]!;
-  const p1 = start.createdBy.toLowerCase();
-  const p2 = p1 === me ? otherUserId.toLowerCase() : me;
-  const turn = step % 2 === 0 ? p1 : p2;
+  const allPlayers = useMemo(() => {
+    if (!participants || participants.length === 0) {
+      const p1 = start?.createdBy.toLowerCase() || "";
+      const p2 = p1 === me ? otherUserId.toLowerCase() : me;
+      return [p1, p2];
+    }
+    const set = new Set<string>();
+    set.add(start?.createdBy.toLowerCase() || "");
+    participants?.forEach((p) => set.add(p.username.toLowerCase()));
+    set.add(me);
+    return Array.from(set).sort();
+  }, [participants, start?.createdBy, me, otherUserId]);
+
+  const turn = allPlayers[step % allPlayers.length];
   const myTurn = turn === me;
 
   return (
@@ -107,7 +120,7 @@ export function EmojiPictionaryInline({
 
       <div className="p-3 space-y-3">
         <div className="rounded-2xl border border-white/10 bg-black/30 p-3 text-center">
-          <div className="text-[11px] text-white/60 mb-1">{myTurn ? "دورك تشرح" : "دور الطرف التاني"}</div>
+          <div className="text-[11px] text-white/60 mb-1">{myTurn ? "دورك تشرح" : `دور ${turn} يشرح`}</div>
           <div className="text-[28px] leading-none">{prompt}</div>
         </div>
 

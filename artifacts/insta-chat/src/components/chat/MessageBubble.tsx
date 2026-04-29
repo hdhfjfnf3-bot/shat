@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState, useMemo } from "react";
-import { Copy, CornerUpLeft, Trash2, Smile } from "lucide-react";
+import * as ContextMenu from "@radix-ui/react-context-menu";
+import { Copy, CornerUpLeft, Trash2, Smile, Edit2 } from "lucide-react";
 import { Message, CURRENT_USER, User } from "@/lib/types";
 import { useChatStore } from "@/lib/store";
 import { EmojiText } from "./EmojiText";
@@ -18,6 +19,11 @@ import { EmojiPictionaryInline } from "./EmojiPictionaryInline";
 import { FastTapInline } from "./FastTapInline";
 import { SpinWheelInline } from "./SpinWheelInline";
 import { WordChainInline } from "./WordChainInline";
+import { WouldYouRatherInline } from "./WouldYouRatherInline";
+import { NeverHaveIEverInline } from "./NeverHaveIEverInline";
+import { ScrambledWordInline } from "./ScrambledWordInline";
+import { LoveCalculatorInline } from "./LoveCalculatorInline";
+import { PollInline } from "./PollInline";
 import emojiRegex from "emoji-regex";
 
 const QUICK_REACTIONS = ["❤️", "😂", "😮", "😢", "😡", "👍"];
@@ -40,6 +46,8 @@ interface Props {
   otherUser?: User;
   conversationId: string;
   allMessages: Message[];
+  isGroup?: boolean;
+  participants?: User[];
 }
 
 /* ── Instagram-exact theme colors ─────────────────────────────────── */
@@ -55,11 +63,10 @@ const themeColorsMap: Record<string, string> = {
 
 export const MessageBubble = memo(function MessageBubble({
   msg, isOwn, isFirstInGroup, isLastInGroup, isLastOverall,
-  borderRadius, otherUser, conversationId, allMessages,
+  borderRadius, otherUser, conversationId, allMessages, isGroup, participants
 }: Props) {
-  const { toggleReaction, unsendMessage, setReplyingTo } = useChatStore();
+  const { toggleReaction, unsendMessage, setReplyingTo, setEditingMessage } = useChatStore();
   const [showActions, setShowActions] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
   const [swipeX, setSwipeX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
@@ -98,15 +105,15 @@ export const MessageBubble = memo(function MessageBubble({
 
   /* Close on outside click */
   useEffect(() => {
-    if (!showMenu && !showReactions) return;
+    if (!showReactions) return;
     const fn = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setShowMenu(false); setShowReactions(false); setShowActions(false);
+        setShowReactions(false); setShowActions(false);
       }
     };
     document.addEventListener("mousedown", fn);
     return () => document.removeEventListener("mousedown", fn);
-  }, [showMenu, showReactions]);
+  }, [showReactions]);
 
   const handleTap = () => {
     const now = Date.now();
@@ -118,9 +125,10 @@ export const MessageBubble = memo(function MessageBubble({
     }
   };
 
-  const handleReply  = () => { setReplyingTo(conversationId, msg.id); setShowMenu(false); setShowActions(false); };
-  const handleCopy   = () => { navigator.clipboard.writeText(msg.content).catch(() => {}); setShowMenu(false); setShowActions(false); };
-  const handleUnsend = () => { unsendMessage(conversationId, msg.id); setShowMenu(false); setShowActions(false); };
+  const handleReply  = () => { setReplyingTo(conversationId, msg.id); setShowActions(false); };
+  const handleEdit   = () => { setEditingMessage(conversationId, msg.id); setShowActions(false); };
+  const handleCopy   = () => { navigator.clipboard.writeText(msg.content).catch(() => {}); setShowActions(false); };
+  const handleUnsend = () => { unsendMessage(conversationId, msg.id); setShowActions(false); };
   const onReact = (emoji: string) => { toggleReaction(conversationId, msg.id, emoji); setShowReactions(false); setShowActions(false); };
 
   const reactions = msg.reactions ?? [];
@@ -178,7 +186,9 @@ export const MessageBubble = memo(function MessageBubble({
 
   /* ── Normal ──────────────────────────────────────────────────────── */
   return (
-    <div className="relative w-full overflow-visible">
+    <ContextMenu.Root onOpenChange={(open) => { if (!open) setShowActions(false); }}>
+      <ContextMenu.Trigger asChild>
+        <div className="relative w-full overflow-visible">
       {/* Swipe icon */}
       {swipeX < 0 && (
         <div
@@ -206,7 +216,7 @@ export const MessageBubble = memo(function MessageBubble({
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
         onMouseEnter={() => setShowActions(true)}
-        onMouseLeave={() => { if (!showMenu && !showReactions) setShowActions(false); }}
+        onMouseLeave={() => { if (!showReactions) setShowActions(false); }}
       >
 
         {/* Other user avatar */}
@@ -241,29 +251,25 @@ export const MessageBubble = memo(function MessageBubble({
                 <button onClick={handleReply} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 hover:text-white transition-colors" title="ردّ">
                   <CornerUpLeft className="w-[15px] h-[15px]" />
                 </button>
-                <button onClick={() => setShowMenu(s => !s)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 hover:text-white transition-colors" title="المزيد">
-                  <span className="text-[18px] leading-none">⋯</span>
-                </button>
               </div>
             )}
 
             {/* ── Bubble ────────────────────────────────────────────── */}
             <div
               onClick={handleTap}
-              onContextMenu={(e) => { e.preventDefault(); setShowActions(true); setShowMenu(true); }}
-              className={`relative select-none cursor-pointer ${
+              className={`relative select-none cursor-pointer active:scale-[0.98] transition-transform ${
                 msg.type === "like" || isOnlyEmoji
                   ? "text-[36px]"
                   : msg.type === "image" || msg.type === "video"
                     ? "p-0 overflow-hidden"
                     : msg.type === "voice"
                       ? `px-3 py-2.5 ${isOwn ? `${themeClass} text-white` : "bg-[#1e1e1e] border border-white/[0.1]"}`
-                      : msg.type === "game"
+                      : msg.type === "game" || msg.type === "poll"
                         ? "p-0 overflow-hidden"
-                        : `px-[14px] py-[9px] text-[15px] ${
+                        : `px-[14px] py-[9px] text-[15px] shadow-lg shadow-black/10 border ${
                             isOwn
-                              ? `${themeClass} text-white`
-                              : "bg-transparent border border-[#363636] text-[#fafafa]"
+                              ? `${themeClass} border-white/20 text-white`
+                              : "bg-[#181818]/80 backdrop-blur-md border-white/10 text-[#fafafa]"
                           }`
               } leading-[1.35] break-words whitespace-pre-wrap`}
               style={{
@@ -285,7 +291,7 @@ export const MessageBubble = memo(function MessageBubble({
               ) : msg.type === "game" ? (
                 <div className="w-[85vw] sm:w-[70vw] md:w-[50vw] max-w-[600px] flex flex-col justify-stretch items-stretch">
                   {gamePayload?.kind === "hub" ? (
-                    <GameHubInline hubMessage={msg} conversationId={conversationId} />
+                    <GameHubInline hubMessage={msg} conversationId={conversationId} isGroup={isGroup} participants={participants} />
                   ) : gamePayload?.kind === "rps" ? (
                     <RpsInlineGame gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} />
                   ) : gamePayload?.kind === "xo_start" ? (
@@ -295,29 +301,44 @@ export const MessageBubble = memo(function MessageBubble({
                   ) : gamePayload?.kind === "c4_start" ? (
                     <Connect4InlineGame gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} />
                   ) : gamePayload?.kind === "sl_start" ? (
-                    <SnakesLaddersInline gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} />
+                    <SnakesLaddersInline gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} participants={participants} />
                   ) : gamePayload?.kind === "bank_start" ? (
-                    <BankElHazInline gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} />
+                    <BankElHazInline gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} participants={participants} />
                   ) : gamePayload?.kind === "cards_start" ? (
                     <CardsInlineGame gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} />
                   ) : gamePayload?.kind === "domino_start" ? (
                     <DominoesInlineGame gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} />
                   ) : gamePayload?.kind === "qnd_start" ? (
-                    <QnDInlineGame gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} />
+                    <QnDInlineGame gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} participants={participants} />
                   ) : gamePayload?.kind === "emoji_pict_start" ? (
-                    <EmojiPictionaryInline gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} />
+                    <EmojiPictionaryInline gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} participants={participants} />
                   ) : gamePayload?.kind === "fasttap_start" ? (
-                    <FastTapInline gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} />
+                    <FastTapInline gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} participants={participants} />
                   ) : gamePayload?.kind === "wheel_start" ? (
-                    <SpinWheelInline gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} />
+                    <SpinWheelInline gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} participants={participants} />
                   ) : gamePayload?.kind === "wordchain_start" ? (
-                    <WordChainInline gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} />
+                    <WordChainInline gameMessage={msg} otherUserId={(otherUser?.id ?? "").toLowerCase()} conversationId={conversationId} allMessages={allMessages} participants={participants} />
+                  ) : gamePayload?.kind === "wyr_start" ? (
+                    <WouldYouRatherInline gameMessage={msg} conversationId={conversationId} allMessages={allMessages} participants={participants} />
+                  ) : gamePayload?.kind === "nhi_start" ? (
+                    <NeverHaveIEverInline gameMessage={msg} conversationId={conversationId} allMessages={allMessages} participants={participants} />
+                  ) : gamePayload?.kind === "scramble_start" ? (
+                    <ScrambledWordInline gameMessage={msg} conversationId={conversationId} allMessages={allMessages} />
+                  ) : gamePayload?.kind === "lovecalc_start" ? (
+                    <LoveCalculatorInline gameMessage={msg} conversationId={conversationId} allMessages={allMessages} />
                   ) : (
                     <div className="rounded-2xl border border-white/10 bg-[#141414] p-3 text-[13px] text-[#a8a8a8]">
                       رسالة لعبة ({gamePayload?.kind ?? "غير معروف"}).
                     </div>
                   )}
                 </div>
+              ) : msg.type === "poll" ? (
+                <PollInline 
+                  msg={msg} 
+                  conversationId={conversationId} 
+                  isOwn={isOwn} 
+                  participants={participants ?? []}
+                />
               ) : (
                 <EmojiText text={msg.content} />
               )}
@@ -332,13 +353,10 @@ export const MessageBubble = memo(function MessageBubble({
                 <button onClick={handleReply} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 hover:text-white transition-colors">
                   <CornerUpLeft className="w-[15px] h-[15px]" />
                 </button>
-                <button onClick={() => setShowMenu(s => !s)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 hover:text-white transition-colors">
-                  <span className="text-[18px] leading-none">⋯</span>
-                </button>
               </div>
             )}
 
-            {/* Quick reactions popup */}
+            {/* Quick reactions popup for desktop hover fallback */}
             {showReactions && (
               <div
                 className={`absolute -top-12 ${isOwn ? "right-0" : "left-0"} z-[60] bg-[#262626] border border-white/[0.08] rounded-full px-2 py-1.5 flex items-center gap-1 shadow-2xl`}
@@ -353,19 +371,6 @@ export const MessageBubble = memo(function MessageBubble({
                     <EmojiText text={e} size={22} />
                   </button>
                 ))}
-              </div>
-            )}
-
-            {/* Context menu */}
-            {showMenu && (
-              <div
-                className={`absolute top-full mt-2 ${isOwn ? "right-0" : "left-0"} z-[60] w-[180px] bg-[#262626] rounded-[16px] overflow-hidden shadow-2xl ring-1 ring-black/30`}
-                style={{ animation: "bubblePop 0.15s cubic-bezier(.34,1.3,.64,1) both" }}
-              >
-                <MI icon={<CornerUpLeft className="w-[17px] h-[17px]" />} label="ردّ" onClick={handleReply} />
-                <MI icon={<Copy className="w-[17px] h-[17px]" />} label="نسخ" onClick={handleCopy} />
-                {isOwn && <div className="h-px bg-white/[0.08] mx-3" />}
-                {isOwn && <MI icon={<Trash2 className="w-[17px] h-[17px]" />} label="سحب الرسالة" onClick={handleUnsend} destructive />}
               </div>
             )}
           </div>
@@ -386,21 +391,63 @@ export const MessageBubble = memo(function MessageBubble({
 
           {/* Delivery status — only for own last message */}
           {isOwn && isLastInGroup && isLastOverall && (
-            <div className="text-[11px] text-[#737373] mt-[3px] pr-1 font-medium animate-in fade-in duration-300">
+            <div className="text-[11px] text-[#737373] mt-[3px] pr-1 font-medium animate-in fade-in duration-300 flex items-center gap-1">
               {msg.status === "sending" ? "جاري الإرسال..." : msg.status === "sent" ? "أُرسلت" : msg.status === "delivered" ? "وصلت" : "مقروءة"}
+              {msg.isEdited && <span className="text-[10px] bg-white/5 px-1 rounded-sm text-[#555]">عدّلت</span>}
             </div>
           )}
         </div>
       </div>
     </div>
+    </ContextMenu.Trigger>
+
+    {/* Context Menu Content */}
+    <ContextMenu.Portal>
+      <ContextMenu.Content
+        className="z-[100] w-[220px] bg-[#262626]/95 backdrop-blur-xl rounded-[16px] overflow-hidden shadow-2xl ring-1 ring-black/30 animate-in fade-in zoom-in-95 duration-150 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 data-[side=right]:slide-in-from-left-2 data-[side=left]:slide-in-from-right-2"
+      >
+        {/* Quick Reactions inside context menu (fixes cutoff issues on mobile) */}
+        <div className="flex items-center justify-between px-2 py-2 border-b border-white/[0.08] bg-[#333]/50">
+          {QUICK_REACTIONS.map((e) => (
+            <ContextMenu.Item
+              key={e}
+              onSelect={() => onReact(e)}
+              className={`w-8 h-8 rounded-full text-[20px] flex items-center justify-center hover:scale-125 transition-transform leading-none outline-none ${myReaction === e ? "bg-white/15" : ""}`}
+            >
+              <EmojiText text={e} size={22} />
+            </ContextMenu.Item>
+          ))}
+        </div>
+
+        <div className="p-1.5">
+          <ContextMenu.Item onSelect={handleReply} className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-white/10 outline-none text-[#fafafa] text-[14px] cursor-pointer font-medium transition-colors">
+            ردّ
+            <CornerUpLeft className="w-[16px] h-[16px] opacity-80" />
+          </ContextMenu.Item>
+          
+          <ContextMenu.Item onSelect={handleCopy} className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-white/10 outline-none text-[#fafafa] text-[14px] cursor-pointer font-medium transition-colors">
+            نسخ
+            <Copy className="w-[16px] h-[16px] opacity-80" />
+          </ContextMenu.Item>
+
+          {isOwn && msg.type === "text" && (
+            <ContextMenu.Item onSelect={handleEdit} className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-white/10 outline-none text-[#fafafa] text-[14px] cursor-pointer font-medium transition-colors">
+              تعديل
+              <Edit2 className="w-[16px] h-[16px] opacity-80" />
+            </ContextMenu.Item>
+          )}
+
+          {isOwn && <ContextMenu.Separator className="h-px bg-white/[0.08] my-1 mx-1" />}
+          
+          {isOwn && (
+            <ContextMenu.Item onSelect={handleUnsend} className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-[#ed4956]/15 text-[#ed4956] outline-none text-[14px] cursor-pointer font-medium transition-colors">
+              سحب الرسالة
+              <Trash2 className="w-[16px] h-[16px]" />
+            </ContextMenu.Item>
+          )}
+        </div>
+      </ContextMenu.Content>
+    </ContextMenu.Portal>
+  </ContextMenu.Root>
   );
 });
-
-function MI({ icon, label, onClick, destructive }: { icon: React.ReactNode; label: string; onClick: () => void; destructive?: boolean }) {
-  return (
-    <button onClick={onClick} className={`w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 active:bg-white/10 text-[14px] transition-colors ${destructive ? "text-[#ed4956]" : "text-[#fafafa]"}`}>
-      <span className="font-medium">{label}</span>
-      {icon}
-    </button>
-  );
-}

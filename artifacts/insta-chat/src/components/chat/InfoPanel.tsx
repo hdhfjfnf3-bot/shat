@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { X, LogOut, BellOff, Trash2, UserX } from "lucide-react";
+import { useState, useRef } from "react";
+import { X, LogOut, BellOff, Trash2, UserX, Image as ImageIcon } from "lucide-react";
 import { useMe } from "@/lib/me";
 import { useChatStore } from "@/lib/store";
 import { useLocation } from "wouter";
@@ -17,6 +17,7 @@ export function InfoPanel({ user, conversationId, onClose }: Props) {
   const [, setLocation] = useLocation();
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const conv = conversations[conversationId];
   const isMuted = conv?.isMuted || false;
@@ -35,6 +36,9 @@ export function InfoPanel({ user, conversationId, onClose }: Props) {
     { id: "cyberpunk", name: "سايبر بانك نيون", colors: "from-[#f000ff] to-[#00d4ff]" },
     { id: "forest", name: "غابة استوائية", colors: "from-[#11998e] to-[#38ef7d]" },
     { id: "halloween", name: "نار وهالوين", colors: "from-[#ff8c00] to-[#e52e71]" },
+    { id: "sunset", name: "غروب الشمس", colors: "from-[#fc4a1a] to-[#f7b733]" },
+    { id: "aurora", name: "أضواء الشفق", colors: "from-[#00b09b] to-[#96c93d]" },
+    { id: "royal", name: "ملكي فخم", colors: "from-[#141E30] to-[#243B55]" },
   ];
 
   const handleLogout = () => {
@@ -49,6 +53,19 @@ export function InfoPanel({ user, conversationId, onClose }: Props) {
     }
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (ev.target?.result) {
+        useChatStore.getState().setConversationBackground(conversationId, ev.target.result as string, undefined);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
   return (
     <>
       {/* Backdrop */}
@@ -59,7 +76,7 @@ export function InfoPanel({ user, conversationId, onClose }: Props) {
 
       {/* Panel */}
       <div
-        className="fixed left-0 top-0 bottom-0 z-[160] w-full max-w-[320px] bg-[#0d0d0d] border-r border-white/[0.07] flex flex-col overflow-hidden"
+        className="fixed left-0 top-0 bottom-0 z-[160] w-full max-w-[320px] bg-[#0d0d0d]/80 backdrop-blur-3xl border-r border-white/[0.07] flex flex-col overflow-hidden"
         style={{ animation: "panelIn 0.22s cubic-bezier(.34,1.2,.64,1) both" }}
       >
         {/* Header */}
@@ -73,28 +90,32 @@ export function InfoPanel({ user, conversationId, onClose }: Props) {
           </button>
         </div>
 
-        {/* User card */}
+        {/* User/Group card */}
         <div className="flex flex-col items-center pt-8 pb-6 px-6 border-b border-white/[0.07]">
           <div className="relative mb-4">
             <img
-              src={user.avatarUrl}
+              src={conv?.isGroup ? `https://ui-avatars.com/api/?name=${encodeURIComponent(conv.groupName || "مجموعة")}&background=262626&color=fff` : user.avatarUrl}
               className="w-24 h-24 rounded-full object-cover ring-4 ring-white/10"
-              alt={user.username}
+              alt={conv?.isGroup ? conv.groupName : user.username}
             />
-            {user.isOnline && (
+            {!conv?.isGroup && user.isOnline && (
               <span className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-[#00d26a] border-2 border-[#0d0d0d] ring-1 ring-[#00d26a]/40" />
             )}
           </div>
-          <h2 className="text-white font-bold text-[20px] mb-0.5">
-            {user.displayName || user.username}
+          <h2 className="text-white font-bold text-[20px] mb-0.5 text-center">
+            {conv?.isGroup ? conv.groupName : (user.displayName || user.username)}
           </h2>
-          <p className="text-[#555] text-[13px]">@{user.username}</p>
-          <div className="mt-3 px-3 py-1.5 rounded-full text-[12px] font-medium" style={{
-            background: user.isOnline ? "rgba(0,210,106,0.12)" : "rgba(255,255,255,0.05)",
-            color: user.isOnline ? "#00d26a" : "#737373",
-          }}>
-            {user.isOnline ? "● نشط الآن" : "غير متصل"}
-          </div>
+          {!conv?.isGroup && <p className="text-[#555] text-[13px]">@{user.username}</p>}
+          {conv?.isGroup ? (
+            <p className="text-[#a8a8a8] text-[13px] mt-1">{conv.participants.length} أعضاء</p>
+          ) : (
+            <div className="mt-3 px-3 py-1.5 rounded-full text-[12px] font-medium" style={{
+              background: user.isOnline ? "rgba(0,210,106,0.12)" : "rgba(255,255,255,0.05)",
+              color: user.isOnline ? "#00d26a" : "#737373",
+            }}>
+              {user.isOnline ? "● نشط الآن" : "غير متصل"}
+            </div>
+          )}
         </div>
 
         {/* Actions */}
@@ -124,6 +145,59 @@ export function InfoPanel({ user, conversationId, onClose }: Props) {
                   )}
                 </button>
               ))}
+            </div>
+
+            {/* Custom Background Section */}
+            <div className="text-[11px] uppercase tracking-widest text-[#444] font-semibold px-2 mb-2 text-right border-t border-white/5 pt-4">
+              خلفية المحادثة المخصصة
+            </div>
+            <div className="px-2 mb-4">
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={handleImageUpload}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 border border-white/10 transition-colors group mb-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white">
+                    <ImageIcon className="w-4 h-4" />
+                  </div>
+                  <span className="text-[13px] font-medium text-white group-hover:text-[#a8a8a8] transition-colors">
+                    {conv?.bgImage ? "تغيير الخلفية" : "إضافة خلفية مخصصة"}
+                  </span>
+                </div>
+              </button>
+
+              {conv?.bgImage && (
+                <>
+                  <div className="flex items-center justify-between text-[12px] text-[#a8a8a8] mb-2 px-1">
+                    <span>شفافية الخلفية</span>
+                    <span>{Math.round((conv.bgOpacity ?? 0.15) * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={conv.bgOpacity ?? 0.15}
+                    onChange={(e) => useChatStore.getState().setConversationBackground(conversationId, undefined, parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-[#333] rounded-lg appearance-none cursor-pointer accent-[#0095f6]"
+                  />
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      onClick={() => useChatStore.getState().setConversationBackground(conversationId, "", undefined)}
+                      className="text-[12px] text-[#ed4956] hover:underline"
+                    >
+                      إزالة الخلفية
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Settings Section */}

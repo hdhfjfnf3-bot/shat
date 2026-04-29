@@ -59,6 +59,34 @@ type QndStartPayload = {
   safeMode: boolean;
 };
 
+type WyrStartPayload = {
+  kind: "wyr_start";
+  gameId: string;
+  createdBy: string;
+  createdAt: string;
+};
+
+type NhiStartPayload = {
+  kind: "nhi_start";
+  gameId: string;
+  createdBy: string;
+  createdAt: string;
+};
+
+type ScrambleStartPayload = {
+  kind: "scramble_start";
+  gameId: string;
+  createdBy: string;
+  createdAt: string;
+};
+
+type LoveCalcStartPayload = {
+  kind: "lovecalc_start";
+  gameId: string;
+  createdBy: string;
+  createdAt: string;
+};
+
 type EmojiPictStartPayload = {
   kind: "emoji_pict_start";
   gameId: string;
@@ -156,9 +184,13 @@ function HubButton({
 export function GameHubInline({
   hubMessage,
   conversationId,
+  isGroup,
+  participants = [],
 }: {
   hubMessage: Message;
   conversationId: string;
+  isGroup?: boolean;
+  participants?: import("@/lib/types").User[];
 }) {
   const { sendMessage } = useChatStore();
   const payload = useMemo(() => safeJsonParse<HubPayload>(hubMessage.content), [hubMessage.content]);
@@ -198,6 +230,66 @@ export function GameHubInline({
               mode: "mix",
               level: "خفيف",
               safeMode: true,
+            };
+            send(start);
+          }}
+        />
+
+        <HubButton
+          title="⚖️ لو خيروك"
+          subtitle="تختار ده ولا ده؟ قرارات صعبة ومضحكة."
+          meta="جديد"
+          onClick={() => {
+            const start: WyrStartPayload = {
+              kind: "wyr_start",
+              gameId: newId(),
+              createdBy: CURRENT_USER.username,
+              createdAt: new Date().toISOString(),
+            };
+            send(start);
+          }}
+        />
+
+        <HubButton
+          title="🚫 عمرك عملت كذا؟ (Never Have I Ever)"
+          subtitle="اعترافات الشات: عملتها ولا معملتهاش؟"
+          meta="تريند"
+          onClick={() => {
+            const start: NhiStartPayload = {
+              kind: "nhi_start",
+              gameId: newId(),
+              createdBy: CURRENT_USER.username,
+              createdAt: new Date().toISOString(),
+            };
+            send(start);
+          }}
+        />
+
+        <HubButton
+          title="🔠 فك الشفرة (كلمة ملخبطة)"
+          subtitle="مين أسرع واحد هيرتب حروف الكلمة؟"
+          meta="سرعة"
+          onClick={() => {
+            const start: ScrambleStartPayload = {
+              kind: "scramble_start",
+              gameId: newId(),
+              createdBy: CURRENT_USER.username,
+              createdAt: new Date().toISOString(),
+            };
+            send(start);
+          }}
+        />
+
+        <HubButton
+          title="💖 مقياس الحب (Love Calculator)"
+          subtitle="نسبة الحب بين اسمين! جربها مع صحابك للضحك."
+          meta="تريند"
+          onClick={() => {
+            const start: LoveCalcStartPayload = {
+              kind: "lovecalc_start",
+              gameId: newId(),
+              createdBy: CURRENT_USER.username,
+              createdAt: new Date().toISOString(),
             };
             send(start);
           }}
@@ -265,136 +357,154 @@ export function GameHubInline({
           }}
         />
 
-        <HubButton
-          title="🎲 حجر / ورقة / مقص"
-          subtitle="سريعة وبتولّع الجو في ثواني."
-          onClick={() => {
-            const start: RpsStartPayload = {
-              kind: "rps",
-              gameId: newId(),
-              createdBy: CURRENT_USER.username,
-              createdAt: new Date().toISOString(),
-              bestOf: 3,
-            };
-            send(start);
-          }}
-        />
+        {!isGroup && (
+          <HubButton
+            title="🎲 حجر / ورقة / مقص"
+            subtitle="سريعة وبتولّع الجو في ثواني."
+            onClick={() => {
+              const start: RpsStartPayload = {
+                kind: "rps",
+                gameId: newId(),
+                createdBy: CURRENT_USER.username,
+                createdAt: new Date().toISOString(),
+                bestOf: 3,
+              };
+              send(start);
+            }}
+          />
+        )}
 
-        <HubButton
-          title="❌⭕ إكس أو (Tic Tac Toe)"
-          subtitle="تحدي الذكاء السريع، العبوا سوا جوه الشات."
-          onClick={() => {
-            const start: XoStartPayload = {
-              kind: "xo_start",
-              gameId: newId(),
-              createdBy: CURRENT_USER.username,
-            };
-            send(start);
-          }}
-        />
+        {!isGroup && (
+          <HubButton
+            title="❌⭕ إكس أو (Tic Tac Toe)"
+            subtitle="تحدي الذكاء السريع، العبوا سوا جوه الشات."
+            onClick={() => {
+              const start: XoStartPayload = {
+                kind: "xo_start",
+                gameId: newId(),
+                createdBy: CURRENT_USER.username,
+              };
+              send(start);
+            }}
+          />
+        )}
 
-        <HubButton
-          title="✍️ نقط ومربعات (Dots & Boxes)"
-          subtitle="قفل المربع بخط وخد نقطة والعب تاني، ذكريات المدرسة!"
-          onClick={() => {
-            const start: DbStartPayload = {
-              kind: "db_start",
-              gameId: newId(),
-              createdBy: CURRENT_USER.username,
-              gridSize: 4, // 4x4 boxes = 5x5 dots
-            };
-            send(start);
-          }}
-        />
+        {!isGroup && (
+          <HubButton
+            title="✍️ نقط ومربعات (Dots & Boxes)"
+            subtitle="قفل المربع بخط وخد نقطة والعب تاني، ذكريات المدرسة!"
+            onClick={() => {
+              const start: DbStartPayload = {
+                kind: "db_start",
+                gameId: newId(),
+                createdBy: CURRENT_USER.username,
+                gridSize: 4, // 4x4 boxes = 5x5 dots
+              };
+              send(start);
+            }}
+          />
+        )}
 
-        <HubButton
-          title="🔵🔴 أربعة في صف (Connect 4)"
-          subtitle="أسقط الأقراص واعمل خط من 4 قبل صاحبك!"
-          onClick={() => {
-            const start: C4StartPayload = {
-              kind: "c4_start",
-              gameId: newId(),
-              createdBy: CURRENT_USER.username,
-            };
-            send(start);
-          }}
-        />
+        {!isGroup && (
+          <HubButton
+            title="🔵🔴 أربعة في صف (Connect 4)"
+            subtitle="أسقط الأقراص واعمل خط من 4 قبل صاحبك!"
+            onClick={() => {
+              const start: C4StartPayload = {
+                kind: "c4_start",
+                gameId: newId(),
+                createdBy: CURRENT_USER.username,
+              };
+              send(start);
+            }}
+          />
+        )}
 
-        <HubButton
-          title="🐍🪜 السلم والثعبان"
-          subtitle="نرد + حركة + سلالم وثعابين… والسبق لحد 100."
-          onClick={() => {
-            const start: SlStartPayload = {
-              kind: "sl_start",
-              gameId: newId(),
-              createdBy: CURRENT_USER.username,
-              createdAt: new Date().toISOString(),
-            };
-            send(start);
-          }}
-        />
+        {(!isGroup || participants.length <= 5) && (
+          <HubButton
+            title="🐍🪜 السلم والثعبان"
+            subtitle="نرد + حركة + سلالم وثعابين… والسبق لحد 100."
+            onClick={() => {
+              const start: SlStartPayload = {
+                kind: "sl_start",
+                gameId: newId(),
+                createdBy: CURRENT_USER.username,
+                createdAt: new Date().toISOString(),
+              };
+              send(start);
+            }}
+          />
+        )}
 
-        <HubButton
-          title="🏦🚗 بنك الحظ (فلوس + بنك + أملاك)"
-          subtitle="نسخة خفيفة ممتعة: لفّ، اشترى، ادفع إيجار، وابنِ ثروة."
-          meta="طويلة"
-          onClick={() => {
-            const tokens: BankStartPayload["token"][] = ["🚗", "🏎️", "🚕", "🛻"];
-            const start: BankStartPayload = {
-              kind: "bank_start",
-              gameId: newId(),
-              createdBy: CURRENT_USER.username,
-              createdAt: new Date().toISOString(),
-              token: tokens[Math.floor(Math.random() * tokens.length)]!,
-            };
-            send(start);
-          }}
-        />
+        {(!isGroup || participants.length <= 3) && (
+          <HubButton
+            title="🏦🚗 بنك الحظ (فلوس + بنك + أملاك)"
+            subtitle="نسخة خفيفة ممتعة: لفّ، اشترى، ادفع إيجار، وابنِ ثروة."
+            meta="طويلة"
+            onClick={() => {
+              const tokens: BankStartPayload["token"][] = ["🚗", "🏎️", "🚕", "🛻"];
+              const start: BankStartPayload = {
+                kind: "bank_start",
+                gameId: newId(),
+                createdBy: CURRENT_USER.username,
+                createdAt: new Date().toISOString(),
+                token: tokens[Math.floor(Math.random() * tokens.length)]!,
+              };
+              send(start);
+            }}
+          />
+        )}
 
-        <HubButton
-          title="🎲 ضومنة (Dominoes)"
-          subtitle="سحب وتوصيل أحجار الضومنة، مين يخلص اللي معاه الأول؟"
-          onClick={() => {
-            const start: DominoStartPayload = {
-              kind: "domino_start",
-              gameId: newId(),
-              createdBy: CURRENT_USER.username,
-            };
-            send(start);
-          }}
-        />
+        {!isGroup && (
+          <HubButton
+            title="🎲 ضومنة (Dominoes)"
+            subtitle="سحب وتوصيل أحجار الضومنة، مين يخلص اللي معاه الأول؟"
+            onClick={() => {
+              const start: DominoStartPayload = {
+                kind: "domino_start",
+                gameId: newId(),
+                createdBy: CURRENT_USER.username,
+              };
+              send(start);
+            }}
+          />
+        )}
 
-        <HubButton
-          title="🃏 كوتشينة: حرب"
-          subtitle="كل واحد يسحب ورقة… الأعلى يكسب نقطة."
-          meta="سريعة"
-          onClick={() => {
-            const start: CardsStartPayload = {
-              kind: "cards_start",
-              gameId: newId(),
-              createdBy: CURRENT_USER.username,
-              createdAt: new Date().toISOString(),
-              mode: "war",
-            };
-            send(start);
-          }}
-        />
+        {!isGroup && (
+          <HubButton
+            title="🃏 كوتشينة: حرب"
+            subtitle="كل واحد يسحب ورقة… الأعلى يكسب نقطة."
+            meta="سريعة"
+            onClick={() => {
+              const start: CardsStartPayload = {
+                kind: "cards_start",
+                gameId: newId(),
+                createdBy: CURRENT_USER.username,
+                createdAt: new Date().toISOString(),
+                mode: "war",
+              };
+              send(start);
+            }}
+          />
+        )}
 
-        <HubButton
-          title="🃏 كوتشينة: أعلى ورقة"
-          subtitle="جولة واحدة سريعة: ورقة وخلصنا."
-          meta="سريعة"
-          onClick={() => {
-            const start: CardsStartPayload = {
-              kind: "cards_start",
-              gameId: newId(),
-              createdBy: CURRENT_USER.username,
-              createdAt: new Date().toISOString(),
-              mode: "high_card",
-            };
-            send(start);
-          }}
-        />
+        {!isGroup && (
+          <HubButton
+            title="🃏 كوتشينة: أعلى ورقة"
+            subtitle="جولة واحدة سريعة: ورقة وخلصنا."
+            meta="سريعة"
+            onClick={() => {
+              const start: CardsStartPayload = {
+                kind: "cards_start",
+                gameId: newId(),
+                createdBy: CURRENT_USER.username,
+                createdAt: new Date().toISOString(),
+                mode: "high_card",
+              };
+              send(start);
+            }}
+          />
+        )}
       </div>
     </div>
   );

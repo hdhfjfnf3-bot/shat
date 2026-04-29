@@ -46,9 +46,9 @@
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/react-query": "catalog:",
-    "@types/node": "catalog:",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vercel/node": "^5.1.14",
@@ -85,6 +85,9 @@
     "emoji-picker-react": "^4.18.0",
     "emoji-regex": "^10.6.0",
     "jsonwebtoken": "^9.0.2",
+    "react-virtuoso": "^4.18.6",
+    "vite-plugin-pwa": "^1.2.0",
+    "workbox-window": "^7.4.0",
     "zustand": "^5.0.12"
   }
 }

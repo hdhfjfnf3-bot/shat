@@ -10,6 +10,7 @@ import { AuthScreen } from "@/components/AuthScreen";
 import { useRealtime } from "@/lib/realtime";
 import { sounds } from "@/lib/sounds";
 import { checkUserExists } from "@/lib/auth";
+import { InstallPWA } from "@/components/InstallPWA";
 
 const queryClient = new QueryClient();
 
@@ -72,6 +73,7 @@ function App() {
       <TooltipProvider>
         {username && token ? <AppShell /> : <AuthScreen />}
         <Toaster />
+        <InstallPWA />
       </TooltipProvider>
     </QueryClientProvider>
   );

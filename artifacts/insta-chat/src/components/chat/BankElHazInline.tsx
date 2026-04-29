@@ -134,7 +134,7 @@ const DiceFace = ({ value, rolling }: { value: number; rolling: boolean }) => {
   );
 };
 
-export function BankElHazInline({ gameMessage, otherUserId, conversationId, allMessages }: { gameMessage: Message; otherUserId: string; conversationId: string; allMessages: Message[] }) {
+export function BankElHazInline({ gameMessage, otherUserId, conversationId, allMessages, participants }: { gameMessage: Message; otherUserId: string; conversationId: string; allMessages: Message[]; participants?: import("@/lib/types").User[] }) {
   const me = useMe((s) => s.username).toLowerCase();
   const { sendMessage } = useChatStore();
   const [isRolling, setIsRolling] = useState(false);
@@ -152,24 +152,46 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
       .sort((a, b) => new Date("at" in a ? a.at : a.createdAt).getTime() - new Date("at" in b ? b.at : b.createdAt).getTime());
   }, [allMessages, gameId]);
 
+  const allPlayers = useMemo(() => {
+    if (!participants || participants.length === 0) {
+      const p1 = start?.createdBy.toLowerCase() || "";
+      const p2 = p1 === me ? otherUserId.toLowerCase() : me;
+      return [p1, p2];
+    }
+    const set = new Set<string>();
+    set.add(start?.createdBy.toLowerCase() || "");
+    participants.forEach(p => set.add(p.username.toLowerCase()));
+    set.add(me);
+    return Array.from(set).sort().slice(0, 4);
+  }, [participants, start?.createdBy, me, otherUserId]);
+
   const state = useMemo(() => {
     const createdBy = (start?.createdBy ?? me).toLowerCase();
-    const p1 = createdBy;
-    const p2 = p1 === me ? otherUserId.toLowerCase() : me;
-    const tokenBy: Record<string, BankStartPayload["token"]> = { [p1]: start?.token ?? "🚗" };
+    const tokenBy: Record<string, BankStartPayload["token"]> = { [createdBy]: start?.token ?? "🚗" };
 
-    let joined = false;
-    let turn = p1;
-    let pos: Record<string, number> = { [p1]: 0, [p2]: 0 };
-    let cash: Record<string, number> = { [p1]: 1500, [p2]: 1500 };
+    let joinedCount = 1;
+    let currentTurnPlayer = createdBy;
+    
+    let pos: Record<string, number> = {};
+    let cash: Record<string, number> = {};
+    let inJail: Record<string, boolean> = {};
+    let jailAttempts: Record<string, number> = {};
+    let jailCards: Record<string, number> = {};
+    let bankrupt: Record<string, boolean> = {};
+
+    for (const p of allPlayers) {
+      pos[p] = 0;
+      cash[p] = 1500;
+      inJail[p] = false;
+      jailAttempts[p] = 0;
+      jailCards[p] = 0;
+      bankrupt[p] = false;
+    }
+
     let owner: Record<number, string> = {};
     let houses: Record<number, number> = {};
-    let inJail: Record<string, boolean> = {};
-    let jailAttempts: Record<string, number> = { [p1]: 0, [p2]: 0 };
-    let jailCards: Record<string, number> = { [p1]: 0, [p2]: 0 };
-    let bankrupt: Record<string, boolean> = { [p1]: false, [p2]: false };
-      let last: { text: string; by?: string; icon?: string } | null = null;
-      let lastCard: { deck: "chance" | "chest"; card: BankCard } | null = null;
+    let last: { text: string; by?: string; icon?: string } | null = null;
+    let lastCard: { deck: "chance" | "chest"; card: BankCard } | null = null;
     let currentDice: [number, number] = [6, 6];
 
     const autoSell = (player: string) => {
@@ -196,14 +218,32 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
       autoSell(by);
     };
 
-    for (const e of events) {
-      if (bankrupt[p1] || bankrupt[p2]) continue;
+    const getNextPlayer = (p: string) => {
+      let idx = allPlayers.indexOf(p);
+      if (idx === -1) idx = 0;
+      for (let i = 0; i < allPlayers.length; i++) {
+        idx = (idx + 1) % allPlayers.length;
+        const nextP = allPlayers[idx];
+        if (nextP && !bankrupt[nextP] && tokenBy[nextP]) return nextP;
+      }
+      return p;
+    };
 
+    for (const e of events) {
       if (e.kind === "bank_join") {
         tokenBy[e.by.toLowerCase()] = e.token;
-        joined = true;
+        joinedCount++;
         last = { by: e.by, text: `انضم للعبة بعربية ${e.token}`, icon: "🏁" };
       }
+
+      const activePlayers = allPlayers.filter(p => !bankrupt[p] && tokenBy[p]);
+      if (activePlayers.length === 0) continue;
+      // ensure currentTurnPlayer is active
+      if (bankrupt[currentTurnPlayer] || !tokenBy[currentTurnPlayer]) {
+        currentTurnPlayer = getNextPlayer(currentTurnPlayer);
+      }
+      
+      const turn = currentTurnPlayer;
 
       if (e.kind === "bank_roll") {
         const by = e.by.toLowerCase();
@@ -226,7 +266,7 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
           } else {
             jailAttempts[by] = (jailAttempts[by] ?? 0) + 1;
             last = { by, text: `محاولة ${jailAttempts[by]} من 3 للخروج من السجن`, icon: "⛓️" };
-            turn = by === p1 ? p2 : p1;
+            currentTurnPlayer = getNextPlayer(currentTurnPlayer);
             continue;
           }
         }
@@ -299,7 +339,9 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
           }
         }
 
-        turn = (isDouble && !inJail[by] && !bankrupt[by]) ? by : (by === p1 ? p2 : p1);
+        if (!(isDouble && !inJail[by] && !bankrupt[by])) {
+          currentTurnPlayer = getNextPlayer(currentTurnPlayer);
+        }
       }
 
       if (e.kind === "bank_buy") {
@@ -348,15 +390,23 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
       }
     }
 
-    const p1Token = tokenBy[p1] ?? "🚗";
-    const p2Token = tokenBy[p2] ?? pickRandomToken(p1Token);
+    for (const p of allPlayers) {
+      if (!tokenBy[p]) {
+        const used = Object.values(tokenBy);
+        tokenBy[p] = TOKENS.find(t => !used.includes(t)) || pickRandomToken();
+      }
+    }
+
+    const activePlayers = allPlayers.filter(p => !bankrupt[p] && tokenBy[p]);
+    if (activePlayers.length > 0 && (bankrupt[currentTurnPlayer] || !tokenBy[currentTurnPlayer])) {
+      currentTurnPlayer = getNextPlayer(currentTurnPlayer);
+    }
 
     return {
-      p1,
-      p2,
-      tokens: { [p1]: p1Token, [p2]: p2Token },
-      joined,
-      turn,
+      allPlayers,
+      tokens: tokenBy,
+      joinedCount,
+      turn: currentTurnPlayer,
       pos,
       cash,
       owner,
@@ -369,7 +419,7 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
       lastCard,
       currentDice,
     };
-  }, [events, me, otherUserId, start?.createdBy, start?.token]);
+  }, [events, me, allPlayers, start?.createdBy, start?.token]);
 
   useEffect(() => {
     if (!isRolling) {
@@ -398,7 +448,7 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
     ? (PROPERTY_GROUPS[sq.group] ?? []).every((index) => state.owner[index] === me)
     : false;
 
-  const join = () => sendMessage(conversationId, JSON.stringify({ kind: "bank_join", gameId, by: me, token: pickRandomToken(state.tokens[state.p1]), at: new Date().toISOString() }), "game");
+  const join = () => sendMessage(conversationId, JSON.stringify({ kind: "bank_join", gameId, by: me, token: TOKENS.find(t => !Object.values(state.tokens).includes(t)) || pickRandomToken(), at: new Date().toISOString() }), "game");
   const buy = () => canBuy && sendMessage(conversationId, JSON.stringify({ kind: "bank_buy", gameId, by: me, square: mePos, at: new Date().toISOString() }), "game");
   const upgrade = () => canUpgrade && sendMessage(conversationId, JSON.stringify({ kind: "bank_upgrade", gameId, by: me, square: mePos, at: new Date().toISOString() }), "game");
   const sell = () => canSell && sendMessage(conversationId, JSON.stringify({ kind: "bank_sell", gameId, by: me, square: mePos, at: new Date().toISOString() }), "game");
@@ -505,22 +555,30 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
         <div className="absolute inset-2 sm:inset-3 bg-[linear-gradient(135deg,#dde9db_0%,#cfdcc7_45%,#dce6d6_100%)] rounded-sm shadow-inner ring-1 ring-black/20" dir="ltr">
           {BOARD.map((sq, i) => renderSquare(sq, i))}
 
-          {/* Tokens (Absolute Floating Overlay) */}
-          <div 
-            className="absolute z-50 flex items-center justify-center w-[14.28%] h-[14.28%] pointer-events-none transition-all duration-[600ms] ease-out drop-shadow-2xl"
-            style={{ ...getCellPos(mePos), transform: "translate(0, 0)" }}
-          >
-            <div className="text-[20px] sm:text-[24px] filter drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] -mt-2 animate-pulse">{state.tokens[me] ?? "🚗"}</div>
-          </div>
-          
-          {state.joined && (
-            <div 
-              className="absolute z-40 flex items-center justify-center w-[14.28%] h-[14.28%] pointer-events-none transition-all duration-[600ms] ease-out drop-shadow-2xl"
-              style={{ ...getCellPos(otherPos), transform: "translate(6px, -6px)" }}
-            >
-              <div className="text-[18px] sm:text-[20px] filter drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] -mb-2">{state.tokens[otherUserId] ?? "🚕"}</div>
-            </div>
-          )}
+          {state.allPlayers.map((p, idx) => {
+            const isJoined = Object.keys(state.tokens).includes(p) || p === state.allPlayers[0];
+            if (!isJoined && state.joinedCount <= 1) return null;
+            // Spread tokens slightly if on same spot
+            const pPos = state.pos[p] ?? 0;
+            const sameSpotCount = state.allPlayers.filter(op => state.pos[op] === pPos).length;
+            let offset = { x: 0, y: 0 };
+            if (sameSpotCount > 1) {
+              const ring = idx % sameSpotCount;
+              offset.x = (ring === 1 || ring === 2 ? 6 : ring === 3 ? -6 : 0);
+              offset.y = (ring === 2 || ring === 3 ? 6 : ring === 1 ? -6 : 0);
+            }
+            return (
+              <div 
+                key={p}
+                className={`absolute z-50 flex items-center justify-center w-[14.28%] h-[14.28%] pointer-events-none transition-all duration-[600ms] ease-out drop-shadow-2xl ${p === me ? "z-[60]" : ""}`}
+                style={{ ...getCellPos(pPos), transform: `translate(${offset.x}px, ${offset.y}px)` }}
+              >
+                <div className={`text-[18px] sm:text-[20px] filter drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] ${p === state.turn ? "animate-pulse scale-110" : ""}`}>
+                  {state.tokens[p]}
+                </div>
+              </div>
+            );
+          })}
 
           {/* Center Area (Realistic style) */}
           <div className="absolute top-[14.28%] left-[14.28%] w-[71.42%] h-[71.42%] flex flex-col items-center justify-center p-3 sm:p-4 text-center pointer-events-none" dir="rtl">
@@ -563,20 +621,25 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
       {/* Modern Controls Panel below the board */}
       <div className="bg-[#1a1a1a] p-3 border-t border-white/10" dir="rtl">
         {/* Scoreboard */}
-        {state.bankrupt[state.p1] || state.bankrupt[state.p2] ? (
+        {state.allPlayers.filter(p => !state.bankrupt[p]).length <= 1 && state.joinedCount > 1 ? (
           <div className="text-[#00d26a] font-black text-center text-[15px] py-2 bg-[#00d26a]/10 rounded-lg animate-pulse border border-[#00d26a]/30">
-            🏆 فاز {state.bankrupt[state.p1] ? state.tokens[state.p2] : state.tokens[state.p1]}! (تم الإفلاس)
+            🏆 فاز {state.tokens[state.allPlayers.find(p => !state.bankrupt[p])!]}!
           </div>
         ) : (
-          <div className="flex justify-between gap-2 mb-3">
-            <div className={`flex-1 flex flex-col items-center rounded-xl p-1.5 border-2 transition-all ${myTurn ? "border-[#0095f6] bg-[#0095f6]/10 shadow-[0_0_12px_rgba(0,149,246,0.25)] scale-105" : "border-white/5 bg-black/40"}`}>
-              <div className="text-[11px] text-[#a8a8a8] font-medium flex items-center gap-1">أنت {state.tokens[me]}</div>
-              <div className="text-[14px] text-[#00d26a] font-black tracking-wide">${meCash}</div>
-            </div>
-            <div className={`flex-1 flex flex-col items-center rounded-xl p-1.5 border-2 transition-all ${!myTurn && state.joined ? "border-[#ed4956] bg-[#ed4956]/10 shadow-[0_0_12px_rgba(237,73,86,0.25)] scale-105" : "border-white/5 bg-black/40"}`}>
-              <div className="text-[11px] text-[#a8a8a8] font-medium flex items-center gap-1">الخصم {state.tokens[otherUserId] ?? "🚕"}</div>
-              <div className="text-[14px] text-[#00d26a] font-black tracking-wide">${otherCash}</div>
-            </div>
+          <div className="flex overflow-x-auto gap-2 mb-3 pb-1 hide-scrollbar">
+            {state.allPlayers.map((p) => {
+              if (state.joinedCount <= 1 && p !== state.allPlayers[0] && p !== me) return null;
+              const isTurn = state.turn === p;
+              const isMe = p === me;
+              return (
+                <div key={p} className={`flex-1 min-w-[80px] flex flex-col items-center rounded-xl p-1.5 border-2 transition-all ${isTurn ? (isMe ? "border-[#0095f6] bg-[#0095f6]/10 shadow-[0_0_12px_rgba(0,149,246,0.25)] scale-105" : "border-[#ed4956] bg-[#ed4956]/10 shadow-[0_0_12px_rgba(237,73,86,0.25)] scale-105") : "border-white/5 bg-black/40"}`}>
+                  <div className="text-[11px] text-[#a8a8a8] font-medium flex items-center gap-1">{isMe ? "أنت" : p} {state.tokens[p]}</div>
+                  <div className={`text-[14px] font-black tracking-wide ${state.bankrupt[p] ? "text-red-500 line-through" : "text-[#00d26a]"}`}>
+                    ${state.cash[p] ?? 0}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -613,11 +676,11 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
         </div>
 
         {/* Buttons */}
-        {!(state.bankrupt[state.p1] || state.bankrupt[state.p2]) && (
+        {state.allPlayers.filter(p => !state.bankrupt[p]).length > 1 && (
           <div>
-            {!state.joined ? (
+            {state.joinedCount < state.allPlayers.length && !Object.keys(state.tokens).includes(me) ? (
               <button onClick={join} className="w-full rounded-xl bg-gradient-to-r from-[#0095f6] to-[#0077c9] py-3 text-[14px] font-black text-white active:scale-[0.98] transition-all shadow-lg hover:shadow-[#0095f6]/40">
-                بدء اللعب {state.tokens[state.p1] === "🚗" ? "🚕" : "🚗"}
+                انضم للعبة 🚗
               </button>
             ) : (
               <div className="flex flex-col gap-2 w-full">

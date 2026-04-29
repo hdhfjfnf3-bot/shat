@@ -58,7 +58,7 @@ function getCenter(cell: number) {
   return { x: parseFloat(pos.left) + 5, y: parseFloat(pos.top) + 5 };
 }
 
-export function SnakesLaddersInline({ gameMessage, otherUserId, conversationId, allMessages }: { gameMessage: Message; otherUserId: string; conversationId: string; allMessages: Message[] }) {
+export function SnakesLaddersInline({ gameMessage, otherUserId, conversationId, allMessages, participants }: { gameMessage: Message; otherUserId: string; conversationId: string; allMessages: Message[]; participants?: import("@/lib/types").User[] }) {
   const me = useMe((s) => s.username).toLowerCase();
   const { sendMessage } = useChatStore();
   const [isRolling, setIsRolling] = useState(false);
@@ -76,29 +76,53 @@ export function SnakesLaddersInline({ gameMessage, otherUserId, conversationId, 
       .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   }, [allMessages, gameId]);
 
-  const state = useMemo(() => {
-    if (!gameId) return { mePos: 1, otherPos: 1, turn: me, winner: null as string | null, lastMove: null as null | { by: string; from: number; landed: number; final: number; roll: number } };
+  const allPlayers = useMemo(() => {
+    if (!participants || participants.length === 0) {
+      const p1 = start?.createdBy.toLowerCase() || "";
+      const p2 = p1 === me ? otherUserId.toLowerCase() : me;
+      return [p1, p2];
+    }
+    const set = new Set<string>();
+    set.add(start?.createdBy.toLowerCase() || "");
+    participants.forEach(p => set.add(p.username.toLowerCase()));
+    set.add(me);
+    return Array.from(set).sort();
+  }, [participants, start?.createdBy, me, otherUserId]);
 
-    let mePos = 1;
-    let otherPos = 1;
-    let turn = (start?.createdBy ?? me).toLowerCase();
+  const TOKEN_COLORS = [
+    "from-blue-600 to-blue-400 border-blue-800",
+    "from-red-600 to-red-400 border-red-800",
+    "from-yellow-500 to-yellow-300 border-yellow-700",
+    "from-purple-600 to-purple-400 border-purple-800",
+    "from-pink-500 to-pink-300 border-pink-700",
+    "from-emerald-500 to-emerald-300 border-emerald-700",
+  ];
+
+  const state = useMemo(() => {
+    const positions: Record<string, number> = {};
+    for (const p of allPlayers) positions[p] = 1;
     let winner: string | null = null;
     let lastMove: null | { by: string; from: number; landed: number; final: number; roll: number } = null;
+    let validRollsCount = 0;
 
     for (const r of rolls) {
       if (winner) break;
+      const turnExpected = allPlayers[validRollsCount % allPlayers.length];
       const by = r.by.toLowerCase();
-      const isMe = by === me;
-      const from = isMe ? mePos : otherPos;
+      if (turnExpected && by !== turnExpected) continue; // ignore invalid or out-of-order rolls
+      
+      if (positions[by] === undefined) positions[by] = 1;
+      const from = positions[by];
       const { landed, final } = nextPos(from, r.value);
-      if (isMe) mePos = final; else otherPos = final;
+      positions[by] = final;
       lastMove = { by, from, landed, final, roll: r.value };
+      validRollsCount++;
       if (final >= 100) { winner = by; break; }
-      turn = by === me ? otherUserId.toLowerCase() : me;
     }
 
-    return { mePos, otherPos, turn, winner, lastMove };
-  }, [gameId, me, otherUserId, rolls, start?.createdBy]);
+    const turn = allPlayers[validRollsCount % allPlayers.length] || me;
+    return { positions, turn, winner, lastMove };
+  }, [allPlayers, rolls, me]);
 
   useEffect(() => {
     if (!isRolling && state.lastMove) setDisplayDice(state.lastMove.roll);
@@ -227,25 +251,25 @@ export function SnakesLaddersInline({ gameMessage, otherUserId, conversationId, 
 
           {/* Tokens Layer */}
           <div className="absolute inset-0 pointer-events-none z-20">
-            {/* Other Player Token */}
-            <div 
-              className="absolute transition-all duration-700 ease-in-out drop-shadow-xl flex items-center justify-center"
-              style={{ ...getCellPos(state.otherPos), transform: 'translate(10%, -10%) scale(1.1)' }}
-            >
-              <div className="w-4 h-5 sm:w-5 sm:h-6 bg-gradient-to-t from-red-600 to-red-400 rounded-t-full shadow-inner border border-red-800 flex items-start justify-center pt-0.5">
-                <div className="w-2 h-2 bg-white/30 rounded-full" />
-              </div>
-            </div>
-            
-            {/* My Token */}
-            <div 
-              className="absolute transition-all duration-700 ease-in-out drop-shadow-xl flex items-center justify-center"
-              style={{ ...getCellPos(state.mePos), transform: 'translate(-10%, 10%) scale(1.1)' }}
-            >
-              <div className="w-4 h-5 sm:w-5 sm:h-6 bg-gradient-to-t from-blue-600 to-blue-400 rounded-t-full shadow-inner border border-blue-800 flex items-start justify-center pt-0.5">
-                <div className="w-2 h-2 bg-white/30 rounded-full" />
-              </div>
-            </div>
+            {allPlayers.map((p, idx) => {
+              const pos = state.positions[p] || 1;
+              const colorClass = TOKEN_COLORS[idx % TOKEN_COLORS.length];
+              // Offset tokens slightly so they don't exactly overlap
+              const offsetX = (idx % 2 === 0 ? 1 : -1) * (idx * 5) + "%";
+              const offsetY = (idx % 2 === 0 ? -1 : 1) * (idx * 5) + "%";
+              
+              return (
+                <div 
+                  key={p}
+                  className="absolute transition-all duration-700 ease-in-out drop-shadow-xl flex items-center justify-center"
+                  style={{ ...getCellPos(pos), transform: `translate(${offsetX}, ${offsetY}) scale(1.1)` }}
+                >
+                  <div className={`w-4 h-5 sm:w-5 sm:h-6 bg-gradient-to-t ${colorClass} rounded-t-full shadow-inner border flex items-start justify-center pt-0.5`}>
+                    <div className="w-2 h-2 bg-white/30 rounded-full" />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -269,15 +293,18 @@ export function SnakesLaddersInline({ gameMessage, otherUserId, conversationId, 
         </div>
 
         {/* Legend */}
-        <div className="flex flex-col gap-1 text-[10px] sm:text-[11px] font-medium border-l border-white/10 pl-3">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-md border border-black" />
-            <span className="text-white">أنت (المركز {state.mePos})</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-md border border-black" />
-            <span className="text-[#a8a8a8]">الخصم (المركز {state.otherPos})</span>
-          </div>
+        <div className="flex flex-col gap-1 text-[10px] sm:text-[11px] font-medium border-l border-white/10 pl-3 max-h-16 overflow-y-auto w-1/3">
+          {allPlayers.map((p, idx) => {
+            const colorClass = TOKEN_COLORS[idx % TOKEN_COLORS.length]?.split(" ")[0].replace("from-", "bg-");
+            return (
+              <div key={p} className="flex items-center gap-1.5 shrink-0">
+                <div className={`w-2.5 h-2.5 rounded-full shadow-md border border-black ${colorClass}`} />
+                <span className={p === me ? "text-white" : "text-[#a8a8a8]"} title={p}>
+                  {p === me ? "أنت" : p} ({state.positions[p] || 1})
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 

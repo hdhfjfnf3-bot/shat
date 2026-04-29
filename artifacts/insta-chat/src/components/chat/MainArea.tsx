@@ -62,13 +62,16 @@ export function MainArea({ activeId }: { activeId: string | null }) {
   const { conversations } = useChatStore();
   const activeConv = activeId ? conversations[activeId] : null;
   const otherUser = activeConv?.participants[0];
+  const isGroup = activeConv?.isGroup;
+  const headerTitle = isGroup ? (activeConv.groupName || "مجموعة") : (otherUser?.displayName || otherUser?.username || "");
+  const headerAvatar = isGroup ? `https://ui-avatars.com/api/?name=${encodeURIComponent(headerTitle)}&background=262626&color=fff` : otherUser?.avatarUrl;
   const [showInfo, setShowInfo] = useState(false);
   const [calling, setCalling] = useState<"audio" | "video" | null>(null);
 
   /* ── Empty state ─────────────────────────────────────────────── */
   if (!activeId || !activeConv) {
     return (
-      <div className={`flex-1 flex-col bg-[#000] relative ${!activeId ? "hidden md:flex" : "flex"}`}>
+      <div className={`flex-1 flex-col bg-transparent relative z-10 ${!activeId ? "hidden md:flex" : "flex"}`}>
         <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-5">
           <div className="relative">
             <div className="w-24 h-24 rounded-full border-2 border-white/20 flex items-center justify-center bg-white/5 backdrop-blur-sm">
@@ -97,8 +100,19 @@ export function MainArea({ activeId }: { activeId: string | null }) {
   }
 
   /* ── Active conversation ─────────────────────────────────────── */
+  const customBg = activeConv.bgImage;
+  const customBgOpacity = activeConv.bgOpacity ?? 0.15;
+
   return (
-    <div className="flex-1 flex flex-col bg-[#000] relative h-full overflow-hidden">
+    <div className="flex-1 flex flex-col bg-transparent relative h-full overflow-hidden z-10">
+
+      {/* Custom Conversation Background */}
+      {customBg && (
+        <div 
+          className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat pointer-events-none transition-opacity duration-300"
+          style={{ backgroundImage: `url(${customBg})`, opacity: customBgOpacity }}
+        />
+      )}
 
       {/* Call Overlay */}
       {calling && otherUser && (
@@ -115,7 +129,7 @@ export function MainArea({ activeId }: { activeId: string | null }) {
       )}
 
       {/* Header — Instagram Direct style */}
-      <div className="flex items-center justify-between px-1 py-2 border-b border-white/[0.07] bg-black/90 backdrop-blur-md z-10 shrink-0">
+      <div className="flex items-center justify-between px-2 py-2.5 border-b border-white/[0.04] bg-black/40 backdrop-blur-3xl z-10 shrink-0 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
         <div className="flex items-center gap-1">
           {/* Back (mobile) */}
           <button
@@ -132,20 +146,24 @@ export function MainArea({ activeId }: { activeId: string | null }) {
           >
             <div className="relative">
               <img
-                src={otherUser?.avatarUrl}
-                className="w-[38px] h-[38px] rounded-full object-cover"
-                alt={otherUser?.username}
+                src={headerAvatar}
+                className="w-[40px] h-[40px] rounded-full object-cover ring-2 ring-transparent transition-all"
+                alt={headerTitle}
               />
-              {otherUser?.isOnline && (
-                <span className="absolute bottom-0 right-0 w-[11px] h-[11px] bg-[#00d26a] rounded-full border-2 border-black" />
+              {!isGroup && otherUser?.isOnline && (
+                <div className="absolute bottom-0 right-0">
+                  <span className="absolute inline-flex w-full h-full rounded-full bg-[#00d26a] opacity-40 animate-ping" />
+                  <span className="relative inline-flex w-[12px] h-[12px] bg-[#00d26a] rounded-full border-[2.5px] border-[#0a0a0a]" />
+                </div>
               )}
             </div>
             <div className="flex flex-col items-start">
-              <div className="font-semibold text-[15px] text-white leading-tight tracking-tight">
-                {otherUser?.displayName || otherUser?.username}
+              <div className="font-semibold text-[15px] text-white leading-tight tracking-tight flex items-center gap-1.5">
+                {headerTitle}
+                {isGroup && <span className="bg-white/10 text-white/50 text-[10px] px-1.5 py-0.5 rounded-md">مجموعة</span>}
               </div>
               <div className="text-[12px] text-[#737373] mt-[1px]">
-                {otherUser?.isOnline ? "نشط الآن" : "نشط منذ 5 دقائق"}
+                {isGroup ? `${activeConv.participants.length} أعضاء` : (otherUser?.isOnline ? "نشط الآن" : "نشط منذ 5 دقائق")}
               </div>
             </div>
           </button>

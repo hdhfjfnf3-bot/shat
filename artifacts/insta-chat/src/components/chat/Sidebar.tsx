@@ -32,6 +32,11 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
   const [checkState,  setCheckState]  = useState<CheckState>("idle");
   const [foundUser,   setFoundUser]   = useState<string | null>(null);
 
+  /* Group Chat State */
+  const [chatMode,    setChatMode]    = useState<"single" | "group">("single");
+  const [groupName,   setGroupName]   = useState("");
+  const [groupMembers, setGroupMembers] = useState<string[]>([]);
+
   const emojiRef  = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLInputElement>(null);
 
@@ -57,12 +62,30 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
   useEffect(() => { checkUser(newName); }, [newName, checkUser]);
 
   const handleCreate = () => {
-    if (checkState !== "found" || !foundUser) return;
-    const id = createConversation(foundUser);
-    if (id) { setActiveConversation(id); setLocation(`/${id}`); }
-    closeModal();
+    if (chatMode === "single") {
+      if (checkState !== "found" || !foundUser) return;
+      const id = createConversation(foundUser);
+      if (id) { setActiveConversation(id); setLocation(`/${id}`); }
+      closeModal();
+    } else {
+      if (!groupName.trim() || groupMembers.length === 0) return;
+      const { createGroupConversation } = useChatStore.getState();
+      const id = createGroupConversation(groupName.trim(), groupMembers);
+      if (id) { setActiveConversation(id); setLocation(`/${id}`); }
+      closeModal();
+    }
   };
-  const closeModal = () => { setShowNewChat(false); setNewName(""); setCheckState("idle"); setFoundUser(null); };
+  const closeModal = () => { setShowNewChat(false); setNewName(""); setCheckState("idle"); setFoundUser(null); setChatMode("single"); setGroupName(""); setGroupMembers([]); };
+  
+  const handleAddMember = () => {
+    if (checkState === "found" && foundUser && groupMembers.length < 20 && !groupMembers.includes(foundUser)) {
+      setGroupMembers(prev => [...prev, foundUser]);
+      setNewName("");
+      setCheckState("idle");
+      setFoundUser(null);
+      inputRef.current?.focus();
+    }
+  };
 
   /* Emoji picker outside click */
   useEffect(() => {
@@ -80,8 +103,9 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
     .sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime())
     .filter((c) => {
       if (!search) return true;
+      if (c.isGroup) return (c.groupName || "").toLowerCase().includes(search.toLowerCase());
       const p = c.participants[0];
-      return p.username.includes(search.toLowerCase()) || (p.displayName || "").includes(search);
+      return p?.username.toLowerCase().includes(search.toLowerCase()) || (p?.displayName || "").includes(search);
     });
 
   /* Status badge */
@@ -96,7 +120,7 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
   /* ─────────────────────────────────────────────────────────── */
   return (
     <>
-      <div className={`w-full md:w-[360px] flex flex-col border-l border-white/[0.06] bg-black shrink-0 z-10 ${activeId ? "hidden md:flex" : "flex"}`}>
+      <div className={`w-full md:w-[360px] flex flex-col border-l border-white/[0.06] bg-black/40 backdrop-blur-3xl shrink-0 z-10 ${activeId ? "hidden md:flex" : "flex"}`}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-8 pb-3">
@@ -167,21 +191,25 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
             </div>
           ) : (
             convList.map((conv) => {
-              const peer = conv.participants[0];
               const isActive = activeId === conv.id;
               const isUnread = conv.unreadCount > 0;
+              const title = conv.isGroup ? (conv.groupName || "مجموعة") : (conv.participants[0]?.displayName || conv.participants[0]?.username || "مستخدم");
+              const avatar = conv.isGroup ? `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=262626&color=fff` : conv.participants[0]?.avatarUrl;
+              const isOnline = !conv.isGroup && conv.participants[0]?.isOnline;
+
               return (
                 <button key={conv.id}
                   className={`flex items-center px-5 py-3 gap-3.5 w-full text-right transition-colors ${isActive ? "bg-white/[0.08]" : "hover:bg-white/[0.04]"}`}
                   onClick={() => { setActiveConversation(conv.id); setLocation(`/${conv.id}`); }}
                 >
                   <div className="relative shrink-0">
-                    <img src={peer.avatarUrl} alt="" className="w-14 h-14 rounded-full object-cover" />
-                    {peer.isOnline && <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#00d26a] border-[3px] border-black rounded-full" />}
+                    <img src={avatar} alt="" className="w-14 h-14 rounded-full object-cover" />
+                    {isOnline && <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#00d26a] border-[3px] border-black rounded-full" />}
                   </div>
                   <div className="flex-1 min-w-0 text-right">
-                    <div className={`text-[15px] tracking-tight truncate ${isUnread ? "font-bold text-white" : "text-[#fafafa] font-medium"}`}>
-                      {peer.displayName || peer.username}
+                    <div className={`text-[15px] tracking-tight truncate flex items-center gap-2 ${isUnread ? "font-bold text-white" : "text-[#fafafa] font-medium"}`}>
+                      {title}
+                      {conv.isGroup && <span className="bg-white/10 text-white/50 text-[10px] px-1.5 py-0.5 rounded-md">مجموعة</span>}
                     </div>
                     <div className={`text-[13px] truncate mt-[2px] ${isUnread ? "text-white font-semibold" : "text-[#a8a8a8]"}`}>
                       {conv.lastMessage
@@ -218,16 +246,65 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
               </button>
             </div>
 
+            {/* Tabs for Mode */}
+            <div className="flex border-b border-white/[0.06]">
+              <button
+                onClick={() => setChatMode("single")}
+                className={`flex-1 py-3 text-[13px] font-semibold transition-colors ${chatMode === "single" ? "text-white border-b-2 border-[#0095f6]" : "text-[#737373] hover:text-[#a8a8a8]"}`}
+              >
+                محادثة فردية
+              </button>
+              <button
+                onClick={() => setChatMode("group")}
+                className={`flex-1 py-3 text-[13px] font-semibold transition-colors ${chatMode === "group" ? "text-white border-b-2 border-[#0095f6]" : "text-[#737373] hover:text-[#a8a8a8]"}`}
+              >
+                مجموعة (إلى 20 شخص)
+              </button>
+            </div>
+
             {/* Input */}
-            <div className="px-5 pt-5 pb-3">
-              <label className="text-[11px] text-[#555] font-semibold uppercase tracking-wider block mb-3">إلى</label>
+            <div className="px-5 pt-4 pb-3">
+              {chatMode === "group" && (
+                <div className="mb-4">
+                  <label className="text-[11px] text-[#555] font-semibold uppercase tracking-wider block mb-2">اسم المجموعة</label>
+                  <div className="border-b-2 border-white/20 focus-within:border-[#0095f6] pb-2 transition-colors">
+                    <input value={groupName} onChange={(e) => setGroupName(e.target.value)}
+                      placeholder="اكتب اسم الجروب..."
+                      className="bg-transparent outline-none text-white text-[15px] w-full placeholder:text-[#444]"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <label className="text-[11px] text-[#555] font-semibold uppercase tracking-wider block mb-3">
+                {chatMode === "group" ? `إضافة عضو (${groupMembers.length}/20)` : "إلى"}
+              </label>
+              
+              {chatMode === "group" && groupMembers.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {groupMembers.map(m => (
+                    <div key={m} className="bg-[#0095f6]/20 text-[#0095f6] text-[12px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                      {m}
+                      <button onClick={() => setGroupMembers(prev => prev.filter(x => x !== m))} className="hover:text-white"><X className="w-3 h-3" /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className={`flex items-center gap-2 border-b-2 pb-2 transition-colors ${
                 checkState === "found" ? "border-[#00d26a]" : checkState === "notfound" ? "border-[#ed4956]" : "border-white/20 focus-within:border-[#0095f6]"}`}>
                 <span className="text-[#555]">@</span>
                 <input ref={inputRef} value={newName} onChange={(e) => setNewName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); if (e.key === "Escape") closeModal(); }}
+                  onKeyDown={(e) => { 
+                    if (e.key === "Enter") {
+                      if (chatMode === "single") handleCreate();
+                      else handleAddMember();
+                    }
+                    if (e.key === "Escape") closeModal(); 
+                  }}
                   placeholder="اسم المستخدم"
-                  className="bg-transparent outline-none text-white text-[15px] flex-1 placeholder:text-[#444]"
+                  disabled={chatMode === "group" && groupMembers.length >= 20}
+                  className="bg-transparent outline-none text-white text-[15px] flex-1 placeholder:text-[#444] disabled:opacity-50"
                   autoComplete="off" spellCheck={false} dir="ltr" />
                 <Badge />
               </div>
@@ -245,22 +322,30 @@ export function Sidebar({ activeId }: { activeId: string | null }) {
 
               {/* Found user card */}
               {checkState === "found" && foundUser && (
-                <div className="mt-3 flex items-center gap-3 bg-[#00d26a]/10 border border-[#00d26a]/25 rounded-xl px-3.5 py-3">
-                  <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(foundUser)}&background=random&color=fff&size=150`} className="w-9 h-9 rounded-full ring-2 ring-[#00d26a]/30" alt="" />
-                  <div>
-                    <p className="text-[13px] text-white font-semibold">{foundUser}</p>
-                    <p className="text-[12px] text-[#00d26a]">جاهز للدردشة ✓</p>
+                <div className="mt-3 flex items-center justify-between bg-[#00d26a]/10 border border-[#00d26a]/25 rounded-xl px-3.5 py-3">
+                  <div className="flex items-center gap-3">
+                    <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(foundUser)}&background=random&color=fff&size=150`} className="w-9 h-9 rounded-full ring-2 ring-[#00d26a]/30" alt="" />
+                    <div>
+                      <p className="text-[13px] text-white font-semibold">{foundUser}</p>
+                      <p className="text-[12px] text-[#00d26a]">جاهز للدردشة ✓</p>
+                    </div>
                   </div>
+                  {chatMode === "group" && !groupMembers.includes(foundUser) && (
+                    <button onClick={handleAddMember} className="bg-[#00d26a] text-black text-[12px] font-bold px-3 py-1.5 rounded-lg hover:bg-[#00b85c] transition-colors">
+                      إضافة
+                    </button>
+                  )}
                 </div>
               )}
             </div>
 
             {/* CTA */}
             <div className="px-5 pb-5">
-              <button onClick={handleCreate} disabled={checkState !== "found"}
+              <button onClick={handleCreate} 
+                disabled={chatMode === "single" ? checkState !== "found" : (groupMembers.length === 0 || !groupName.trim())}
                 className="w-full py-3 rounded-xl text-white font-bold text-[14px] flex items-center justify-center gap-2 transition-opacity disabled:opacity-40"
-                style={{ background: checkState === "found" ? "linear-gradient(135deg,#4f5bd5,#962fbf,#d62976,#fa7e1e)" : "#222" }}>
-                فتح المحادثة <ArrowLeft className="w-4 h-4" />
+                style={{ background: (chatMode === "single" && checkState === "found") || (chatMode === "group" && groupMembers.length > 0 && groupName.trim()) ? "linear-gradient(135deg,#4f5bd5,#962fbf,#d62976,#fa7e1e)" : "#222" }}>
+                {chatMode === "single" ? "فتح المحادثة" : "إنشاء المجموعة"} <ArrowLeft className="w-4 h-4" />
               </button>
             </div>
           </div>

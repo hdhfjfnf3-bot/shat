@@ -91,11 +91,13 @@ export function QnDInlineGame({
   otherUserId,
   conversationId,
   allMessages,
+  participants,
 }: {
   gameMessage: Message;
   otherUserId: string;
   conversationId: string;
   allMessages: Message[];
+  participants?: import("@/lib/types").User[];
 }) {
   const me = useMe((s) => s.username).toLowerCase();
   const { sendMessage } = useChatStore();
@@ -195,7 +197,9 @@ export function QnDInlineGame({
           </div>
 
           <div className="text-[11px] text-white/45">
-            تبادلوا الدور: مرة سؤال/تحدي عليك… ومرة على الطرف التاني.
+            {participants && participants.length > 0 
+              ? "تبادلوا الدور: كل واحد يسحب سؤال أو تحدي بالدور."
+              : "تبادلوا الدور: مرة سؤال/تحدي عليك… ومرة على الطرف التاني."}
           </div>
         </div>
       )}

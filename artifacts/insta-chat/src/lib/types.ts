@@ -19,6 +19,7 @@ export type MessageType =
   | "like"
   | "game"
   | "theme"
+  | "poll"
   | "vanish_mode";
 
 export type VoiceMeta = {
@@ -32,6 +33,18 @@ export type Reaction = {
   emoji: string;
 };
 
+export type PollOption = {
+  id: string;
+  text: string;
+  votes: string[]; // array of userIds
+};
+
+export type PollMeta = {
+  question: string;
+  options: PollOption[];
+  multipleAnswers: boolean;
+};
+
 export type Message = {
   id: string;
   conversationId: string;
@@ -43,8 +56,9 @@ export type Message = {
   status: MessageStatus;
   createdAt: string;
   isUnsent?: boolean;
-  isEdited?: boolean;
   voice?: VoiceMeta;
+  poll?: PollMeta;
+  isEdited?: boolean;
 };
 
 export type ConversationType = "primary" | "general" | "requests";
@@ -59,6 +73,11 @@ export type Conversation = {
   isPinned: boolean;
   isOnline: boolean;
   lastActiveAt: string;
+  isGroup?: boolean;
+  groupName?: string;
+  groupAvatar?: string;
+  bgImage?: string;
+  bgOpacity?: number;
 };
 
 import { useMe } from "./me";

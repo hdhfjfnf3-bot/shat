@@ -52,11 +52,13 @@ export function WordChainInline({
   otherUserId,
   conversationId,
   allMessages,
+  participants,
 }: {
   gameMessage: Message;
   otherUserId: string;
   conversationId: string;
   allMessages: Message[];
+  participants?: import("@/lib/types").User[];
 }) {
   const me = useMe((s) => s.username).toLowerCase();
   const { sendMessage } = useChatStore();
@@ -89,9 +91,22 @@ export function WordChainInline({
   const last = plays.length ? plays[plays.length - 1] : null;
   const neededLen = start.rule === "آخر حرفين" ? 2 : 1;
   const need = last ? normArabic(last.word).slice(-neededLen) : null;
-  const p1 = start.createdBy.toLowerCase();
-  const p2 = p1 === me ? otherUserId.toLowerCase() : me;
-  const myTurn = (plays.length % 2 === 0 ? p1 : p2) === me;
+  
+  const allPlayers = useMemo(() => {
+    if (!participants || participants.length === 0) {
+      const p1 = start?.createdBy.toLowerCase() || "";
+      const p2 = p1 === me ? otherUserId.toLowerCase() : me;
+      return [p1, p2];
+    }
+    const set = new Set<string>();
+    set.add(start?.createdBy.toLowerCase() || "");
+    participants.forEach((p) => set.add(p.username.toLowerCase()));
+    set.add(me);
+    return Array.from(set).sort();
+  }, [participants, start?.createdBy, me, otherUserId]);
+
+  const currentTurnPlayer = allPlayers[plays.length % allPlayers.length];
+  const myTurn = currentTurnPlayer === me;
 
   const error = useMemo(() => {
     const w = normArabic(word);
@@ -123,7 +138,7 @@ export function WordChainInline({
       <div className="p-3 bg-gradient-to-r from-emerald-500/15 to-lime-500/10">
         <div className="text-[13px] font-black text-white">🔗 سلسلة كلمات</div>
         <div className="text-[11px] text-white/70 mt-0.5">
-          القاعدة: {start.rule} • {myTurn ? "دورك" : "دور الطرف التاني"}
+          القاعدة: {start.rule} • {myTurn ? "دورك" : `دور ${currentTurnPlayer}`}
         </div>
       </div>
 

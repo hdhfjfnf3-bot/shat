@@ -69,6 +69,7 @@ export const MessageBubble = memo(function MessageBubble({
   const { toggleReaction, unsendMessage, setReplyingTo, setEditingMessage } = useChatStore();
   const [showActions, setShowActions] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
+  const [showTime, setShowTime] = useState(false);
   const [swipeX, setSwipeX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -122,6 +123,7 @@ export const MessageBubble = memo(function MessageBubble({
       toggleReaction(conversationId, msg.id, "❤️");
       lastTap.current = 0;
     } else {
+      setShowTime(s => !s);
       lastTap.current = now;
     }
   };
@@ -404,6 +406,13 @@ export const MessageBubble = memo(function MessageBubble({
             <div className="text-[11px] mt-[3px] pr-1 flex items-center gap-1" style={{ color: '#4a6fa5' }}>
               {msg.status === "sending" ? "جاري الإرسال..." : msg.status === "sent" ? "✓ أُرسلت" : msg.status === "delivered" ? "✓✓ وصلت" : "✓✓ مقروءة"}
               {msg.isEdited && <span className="text-[10px] px-1.5 py-0.5 rounded-full text-[#4a6fa5]" style={{ background: 'rgba(79,124,247,0.1)' }}>عدّلت</span>}
+            </div>
+          )}
+          
+          {/* Timestamp Revealed on Tap */}
+          {showTime && (
+            <div className={`text-[10px] text-[#737373] mt-[2px] mb-1 ${isOwn ? "text-right pr-2" : "text-left pl-2"} animate-in fade-in slide-in-from-top-1 duration-150`}>
+              {new Date(msg.createdAt).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" })}
             </div>
           )}
         </div>

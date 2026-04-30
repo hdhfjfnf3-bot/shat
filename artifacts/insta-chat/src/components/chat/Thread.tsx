@@ -130,14 +130,6 @@ export function Thread({ activeId }: { activeId: string }) {
     }
   }, [isTyping, items.length]);
 
-  useEffect(() => {
-    if (virtuoso.current && items.length > 0) {
-      const timer = setTimeout(() => {
-        virtuoso.current?.scrollToIndex({ index: items.length - 1, behavior: "smooth" });
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [items.length]);
 
   return (
     <div className={`flex-1 min-h-0 flex flex-col transition-colors duration-500 overflow-hidden ${vanishMode ? "bg-black" : "bg-transparent"}`}>
@@ -146,7 +138,7 @@ export function Thread({ activeId }: { activeId: string }) {
         className="flex-1 hide-scrollbar"
         data={items}
         initialTopMostItemIndex={items.length > 0 ? items.length - 1 : 0}
-        followOutput="auto"
+        followOutput="smooth"
         alignToBottom={true}
         components={{
           Header: () => (

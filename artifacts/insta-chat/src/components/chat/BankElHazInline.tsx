@@ -139,6 +139,21 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
   const { sendMessage } = useChatStore();
   const [isRolling, setIsRolling] = useState(false);
   const [displayDice, setDisplayDice] = useState<[number, number]>([6, 6]);
+  
+  const [cheatMode, setCheatMode] = useState(false);
+  const [cheatValue, setCheatValue] = useState<number | "">("");
+
+  useEffect(() => {
+    const keys = new Set<string>();
+    const onDown = (e: KeyboardEvent) => {
+      keys.add(e.key.toLowerCase());
+      if (keys.has("a") && keys.has("s")) setCheatMode(true);
+    };
+    const onUp = (e: KeyboardEvent) => keys.delete(e.key.toLowerCase());
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    return () => { window.removeEventListener("keydown", onDown); window.removeEventListener("keyup", onUp); };
+  }, []);
 
   const start = useMemo(() => safeJsonParse<BankStartPayload>(gameMessage.content), [gameMessage.content]);
   const gameId = start?.kind === "bank_start" ? start.gameId : null;
@@ -466,8 +481,17 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
 
     setTimeout(() => {
       clearInterval(interval);
-      const d1 = Math.floor(Math.random() * 6) + 1;
-      const d2 = Math.floor(Math.random() * 6) + 1;
+      let d1 = Math.floor(Math.random() * 6) + 1;
+      let d2 = Math.floor(Math.random() * 6) + 1;
+
+      if (cheatMode && typeof cheatValue === "number" && cheatValue >= 2 && cheatValue <= 12) {
+        d1 = Math.min(6, cheatValue - 1);
+        d2 = cheatValue - d1;
+        if (d1 === 0 || d2 === 0) { d1 = Math.min(6, cheatValue); d2 = Math.max(1, cheatValue - 6); }
+        setCheatMode(false);
+        setCheatValue("");
+      }
+
       sendMessage(conversationId, JSON.stringify({ kind: "bank_roll", gameId, by: me, d1, d2, at: new Date().toISOString() }), "game");
       setIsRolling(false);
     }, 600);
@@ -672,12 +696,17 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
             <div className="text-[11px] mt-1 leading-snug min-h-[34px]">
               {state.lastCard?.card.text ?? "لسه مفيش كارت متسحب."}
             </div>
-          </div>
-        </div>
-
         {/* Buttons */}
         {state.allPlayers.filter(p => !state.bankrupt[p]).length > 1 && (
-          <div>
+          <div className="relative">
+            {cheatMode && (
+              <input 
+                type="number" min={2} max={12} value={cheatValue} 
+                onChange={(e) => setCheatValue(parseInt(e.target.value) || "")}
+                className="w-12 h-6 bg-black/50 text-white text-center rounded absolute -top-8 left-2 z-50 text-[12px] outline-none"
+                placeholder="2-12"
+              />
+            )}
             {state.joinedCount < state.allPlayers.length && !Object.keys(state.tokens).includes(me) ? (
               <button onClick={join} className="w-full rounded-xl bg-gradient-to-r from-[#0095f6] to-[#0077c9] py-3 text-[14px] font-black text-white active:scale-[0.98] transition-all shadow-lg hover:shadow-[#0095f6]/40">
                 انضم للعبة 🚗

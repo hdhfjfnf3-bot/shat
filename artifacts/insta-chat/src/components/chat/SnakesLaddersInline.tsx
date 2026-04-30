@@ -63,6 +63,21 @@ export function SnakesLaddersInline({ gameMessage, otherUserId, conversationId, 
   const { sendMessage } = useChatStore();
   const [isRolling, setIsRolling] = useState(false);
   const [displayDice, setDisplayDice] = useState<number>(6);
+  
+  const [cheatMode, setCheatMode] = useState(false);
+  const [cheatValue, setCheatValue] = useState<number | "">("");
+
+  useEffect(() => {
+    const keys = new Set<string>();
+    const onDown = (e: KeyboardEvent) => {
+      keys.add(e.key.toLowerCase());
+      if (keys.has("a") && keys.has("s")) setCheatMode(true);
+    };
+    const onUp = (e: KeyboardEvent) => keys.delete(e.key.toLowerCase());
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    return () => { window.removeEventListener("keydown", onDown); window.removeEventListener("keyup", onUp); };
+  }, []);
 
   const start = useMemo(() => safeJsonParse<SlStartPayload>(gameMessage.content), [gameMessage.content]);
   const gameId = start?.kind === "sl_start" ? start.gameId : null;
@@ -144,7 +159,14 @@ export function SnakesLaddersInline({ gameMessage, otherUserId, conversationId, 
 
     setTimeout(() => {
       clearInterval(interval);
-      const value = (Math.floor(Math.random() * 6) + 1) as SlRollPayload["value"];
+      let value = (Math.floor(Math.random() * 6) + 1) as SlRollPayload["value"];
+      
+      if (cheatMode && typeof cheatValue === "number" && cheatValue >= 1 && cheatValue <= 6) {
+        value = cheatValue as SlRollPayload["value"];
+        setCheatMode(false);
+        setCheatValue("");
+      }
+
       sendMessage(conversationId, JSON.stringify({ kind: "sl_roll", gameId, by: me, value, at: new Date().toISOString() }), "game");
       setIsRolling(false);
     }, 600);
@@ -165,6 +187,13 @@ export function SnakesLaddersInline({ gameMessage, otherUserId, conversationId, 
         </div>
         {!isDone && (
           <div className="flex flex-col items-center gap-1">
+            {cheatMode && (
+              <input 
+                type="number" min={1} max={6} value={cheatValue} 
+                onChange={(e) => setCheatValue(parseInt(e.target.value) || "")}
+                className="w-10 h-6 bg-black/50 text-white text-center rounded absolute top-2 left-2 z-50 text-[12px] outline-none"
+              />
+            )}
             <button
               onClick={rollDice}
               disabled={!myTurn || isRolling}
@@ -196,11 +225,6 @@ export function SnakesLaddersInline({ gameMessage, otherUserId, conversationId, 
 
           {/* Snakes and Ladders SVG Overlay */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <defs>
-              <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="1" dy="2" stdDeviation="1.5" floodOpacity="0.4" />
-              </filter>
-            </defs>
             {Object.entries(JUMPS).map(([fromStr, to]) => {
               const from = parseInt(fromStr);
               const p1 = getCenter(from);
@@ -212,11 +236,10 @@ export function SnakesLaddersInline({ gameMessage, otherUserId, conversationId, 
                 const dx = p2.x - p1.x;
                 const dy = p2.y - p1.y;
                 const len = Math.sqrt(dx * dx + dy * dy);
-                const angle = Math.atan2(dy, dx) * (180 / Math.PI);
                 const rungs = Math.floor(len / 4);
                 
                 return (
-                  <g key={`l-${from}`} filter="url(#shadow)">
+                  <g key={`l-${from}`}>
                     {/* Rails */}
                     <line x1={p1.x - dy * 0.05} y1={p1.y + dx * 0.05} x2={p2.x - dy * 0.05} y2={p2.y + dx * 0.05} stroke="#8b4513" strokeWidth="1.2" strokeLinecap="round" />
                     <line x1={p1.x + dy * 0.05} y1={p1.y - dx * 0.05} x2={p2.x + dy * 0.05} y2={p2.y - dx * 0.05} stroke="#8b4513" strokeWidth="1.2" strokeLinecap="round" />
@@ -236,10 +259,10 @@ export function SnakesLaddersInline({ gameMessage, otherUserId, conversationId, 
                 const midX = (p1.x + p2.x) / 2 + (Math.random() * 10 - 5);
                 const midY = (p1.y + p2.y) / 2 + (Math.random() * 10 - 5);
                 return (
-                  <g key={`s-${from}`} filter="url(#shadow)">
+                  <g key={`s-${from}`}>
                     {/* Snake Body */}
                     <path d={`M ${p1.x} ${p1.y} Q ${midX} ${midY} ${p2.x} ${p2.y}`} fill="none" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
-                    {/* Snake Head (at the start/top) */}
+                    {/* Snake Head */}
                     <circle cx={p1.x} cy={p1.y} r="1.8" fill="#b91c1c" />
                     {/* Snake Eye */}
                     <circle cx={p1.x - 0.5} cy={p1.y - 0.5} r="0.4" fill="white" />

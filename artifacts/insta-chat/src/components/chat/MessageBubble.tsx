@@ -275,8 +275,8 @@ export const MessageBubble = memo(function MessageBubble({
                         ? "p-0 overflow-hidden"
                         : `px-[15px] py-[10px] text-[15px] font-[450] ${
                             isOwn
-                              ? `${themeClass} text-white shadow-[0_0_15px_rgba(167,139,250,0.3)]`
-                              : "text-[#dde6f0] glass-panel shadow-[0_0_15px_rgba(0,240,255,0.15)] border-l-[2px] border-[#00f0ff]/30"
+                              ? `${themeClass} text-white`
+                              : "text-[#dde6f0] bg-white/[0.04] border-l-[2px] border-[#00f0ff]/40"
                           }`
               } leading-[1.5] break-words whitespace-pre-wrap`}
               style={{
@@ -285,7 +285,7 @@ export const MessageBubble = memo(function MessageBubble({
                   : (msg.type === "image" || msg.type === "video" || msg.type === "game") ? "22px"
                   : borderRadius,
                 ...(!isOwn && msg.type !== "like" && msg.type !== "image" && msg.type !== "video" && msg.type !== "game" && msg.type !== "poll" && !isOnlyEmoji
-                  ? { background: 'rgba(28, 38, 64, 0.4)', backdropFilter: 'blur(10px)' }
+                  ? {}
                   : {}),
               }}
               dir="auto"

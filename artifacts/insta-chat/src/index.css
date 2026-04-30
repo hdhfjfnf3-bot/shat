@@ -83,6 +83,7 @@
   background-size: 200px 200px;
   animation: starsFloat 100s linear infinite;
   opacity: 0.4;
+  will-change: transform;
 }
 
 @keyframes starsFloat {

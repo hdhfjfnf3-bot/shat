@@ -138,8 +138,8 @@ export function MainArea({ activeId }: { activeId: string | null }) {
         />
       )}
 
-      {/* Header — Instagram Direct style */}
-      <div className="flex items-center justify-between px-2 py-2.5 border-b border-white/[0.05] z-10 shrink-0" style={{ background: '#0c1018' }}>
+      {/* Header — Space Glass style */}
+      <div className="flex items-center justify-between px-2 py-2.5 border-b border-white/[0.05] z-10 shrink-0 glass-panel">
         <div className="flex items-center gap-1">
           {/* Back (mobile) */}
           <button
@@ -162,7 +162,9 @@ export function MainArea({ activeId }: { activeId: string | null }) {
               />
               {!isGroup && otherUser?.isOnline && (
                 <div className="absolute bottom-0 right-0">
-                  <span className="absolute inline-flex w-full h-full rounded-full bg-[#00d26a] opacity-40 animate-ping" />
+                  {!inChatPeers[otherUser?.username || ""] && (
+                    <span className="absolute inline-flex w-full h-full rounded-full bg-[#00d26a] opacity-40 animate-ping" />
+                  )}
                   <span className="relative inline-flex w-[12px] h-[12px] bg-[#00d26a] rounded-full border-[2.5px] border-[#0a0a0a]" />
                 </div>
               )}

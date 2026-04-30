@@ -56,7 +56,60 @@
 /* ─── Reset ─────────────────────────────────────────────────────── */
 @layer base {
   * { @apply border-border; box-sizing: border-box; }
-  body { @apply font-sans antialiased bg-background text-foreground; }
+  body { 
+    @apply font-sans antialiased text-foreground; 
+    background-color: #020205;
+    background-image: 
+      radial-gradient(circle at 10% 20%, rgba(55, 20, 150, 0.15) 0%, transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(0, 212, 255, 0.1) 0%, transparent 40%),
+      radial-gradient(circle at 50% 50%, rgba(167, 139, 250, 0.05) 0%, transparent 60%);
+    background-attachment: fixed;
+  }
+}
+
+/* ─── Space Stars Effect ───────────────────────────────────────── */
+.space-stars {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  background-image: 
+    radial-gradient(1px 1px at 20px 30px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(1px 1px at 40px 70px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(1px 1px at 50px 160px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 90px 40px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 130px 80px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(2px 2px at 160px 120px, rgba(255,255,255,0.8), rgba(0,0,0,0));
+  background-repeat: repeat;
+  background-size: 200px 200px;
+  animation: starsFloat 100s linear infinite;
+  opacity: 0.4;
+}
+
+@keyframes starsFloat {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-200px); }
+}
+
+/* ─── Futuristic Glass & Glow ──────────────────────────────────── */
+.glass-panel {
+  background: rgba(10, 10, 18, 0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+.neon-glow {
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.3), inset 0 0 10px rgba(0, 240, 255, 0.1);
+}
+.neon-glow-purple {
+  box-shadow: 0 0 15px rgba(167, 139, 250, 0.4), inset 0 0 10px rgba(167, 139, 250, 0.1);
+}
+.neon-text-blue {
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+}
+.neon-text-purple {
+  text-shadow: 0 0 8px rgba(167, 139, 250, 0.6);
 }
 
 /* ─── Layout ─────────────────────────────────────────────────────── */

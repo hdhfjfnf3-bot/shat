@@ -288,7 +288,7 @@ export function Composer({ activeId }: { activeId: string }) {
           </button>
 
           {/* Input pill */}
-          <div className="flex-1 min-w-0 flex items-end rounded-[26px] px-4 py-[7px] gap-2 relative focus-within:ring-2 focus-within:ring-[#4f7cf7]/30 transition-all duration-200" style={{ background: '#1a2035' }}>
+          <div className="flex-1 min-w-0 flex items-end rounded-[26px] px-4 py-[7px] gap-2 relative transition-all duration-200 glass-panel focus-within:neon-glow-purple">
             <textarea
               ref={taRef}
               value={inputText}

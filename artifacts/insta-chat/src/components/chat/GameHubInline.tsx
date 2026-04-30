@@ -2,6 +2,7 @@ import { useMemo } from "react";
 
 import { Message, CURRENT_USER } from "@/lib/types";
 import { useChatStore } from "@/lib/store";
+import { Gamepad2 } from "lucide-react";
 
 type HubPayload = {
   kind: "hub";
@@ -145,38 +146,41 @@ function newId(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function HubButton({
+function GameCard({
+  icon,
   title,
-  subtitle,
-  meta,
+  isNew,
+  isTrend,
   onClick,
 }: {
+  icon: string;
   title: string;
-  subtitle: string;
-  meta?: string;
+  isNew?: boolean;
+  isTrend?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={[
-        "w-full text-right rounded-2xl border border-white/10 bg-[linear-gradient(135deg,#0b0b0b_0%,#121212_65%,#0b0b0b_100%)] p-3",
-        "hover:bg-white/5 active:bg-white/10 transition-colors",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20",
-      ].join(" ")}
+      className="relative flex flex-col items-center justify-center aspect-square rounded-[20px] bg-white/[0.03] hover:bg-white/[0.08] active:scale-[0.97] border border-white/[0.05] hover:border-white/[0.15] transition-all overflow-hidden group shadow-sm"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[13px] font-black text-white">{title}</div>
-          <div className="text-[12px] text-[#a8a8a8] mt-0.5 leading-snug">{subtitle}</div>
-        </div>
-        {meta ? (
-          <div className="shrink-0 text-[11px] text-white/50 border border-white/10 rounded-full px-2 py-0.5">
-            {meta}
-          </div>
-        ) : null}
+      <div className="text-[32px] mb-2 group-hover:scale-110 group-hover:-translate-y-1 transition-all duration-300 drop-shadow-lg">
+        {icon}
       </div>
+      <span className="text-[11px] font-bold text-[#e0e0e0] leading-tight text-center px-2 w-full">
+        {title}
+      </span>
+      {isNew && (
+        <div className="absolute top-2 left-2 bg-gradient-to-tr from-[#ff0844] to-[#ffb199] text-white text-[9px] font-bold px-1.5 py-[1px] rounded-full shadow-lg">
+          جديد
+        </div>
+      )}
+      {isTrend && !isNew && (
+        <div className="absolute top-2 left-2 bg-gradient-to-tr from-[#f093fb] to-[#f5576c] text-white text-[9px] font-bold px-1.5 py-[1px] rounded-full shadow-lg">
+          تريند
+        </div>
+      )}
     </button>
   );
 }
@@ -201,26 +205,35 @@ export function GameHubInline({
 
   if (!payload || payload.kind !== "hub") {
     return (
-      <div className="rounded-2xl border border-white/10 bg-[#141414] p-3 text-[13px] text-[#a8a8a8]">
-        رسالة مركز ألعاب غير صالحة.
+      <div className="rounded-[24px] border border-white/10 bg-[#141414] p-3 text-[13px] text-[#a8a8a8]">
+        رسالة صالة ألعاب غير صالحة.
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#141414] overflow-hidden">
-      <div className="p-3">
-        <div className="text-[13px] font-bold text-white">مركز الألعاب</div>
-        <div className="text-[12px] text-[#a8a8a8] mt-0.5">
-          اختاروا لعبة… كله جوّه الشات من غير ما تروحوا أي حتة.
+    <div className="w-[300px] sm:w-[320px] rounded-[28px] border border-white/10 bg-[linear-gradient(145deg,#15151e_0%,#0a0a0f_100%)] shadow-2xl overflow-hidden p-4">
+      {/* Premium Header */}
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className="w-10 h-10 rounded-[14px] bg-gradient-to-br from-[#a78bfa]/20 to-[#4f46e5]/20 flex items-center justify-center border border-[#a78bfa]/30 shadow-[0_0_15px_rgba(167,139,250,0.15)]">
+          <Gamepad2 className="w-5 h-5 text-[#a78bfa]" />
+        </div>
+        <div>
+          <div className="text-[15px] font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-white/70 tracking-wide">
+            صالة الألعاب
+          </div>
+          <div className="text-[11px] font-medium text-[#8e8e93] mt-[1px]">
+            اختاروا لعبة والعبوا جوه الشات!
+          </div>
         </div>
       </div>
 
-      <div className="px-3 pb-3 grid gap-2">
-        <HubButton
-          title="🎭 أسئلة وتحديات"
-          subtitle="شات ممتع: أسئلة، تحديات، وميكس… بمستويات."
-          meta="جديد"
+      {/* Compact Grid */}
+      <div className="grid grid-cols-3 gap-2">
+        <GameCard
+          icon="🎭"
+          title="تحديات"
+          isNew
           onClick={() => {
             const start: QndStartPayload = {
               kind: "qnd_start",
@@ -235,10 +248,10 @@ export function GameHubInline({
           }}
         />
 
-        <HubButton
-          title="⚖️ لو خيروك"
-          subtitle="تختار ده ولا ده؟ قرارات صعبة ومضحكة."
-          meta="جديد"
+        <GameCard
+          icon="⚖️"
+          title="لو خيروك"
+          isNew
           onClick={() => {
             const start: WyrStartPayload = {
               kind: "wyr_start",
@@ -250,10 +263,10 @@ export function GameHubInline({
           }}
         />
 
-        <HubButton
-          title="🚫 عمرك عملت كذا؟ (Never Have I Ever)"
-          subtitle="اعترافات الشات: عملتها ولا معملتهاش؟"
-          meta="تريند"
+        <GameCard
+          icon="🚫"
+          title="عمرك عملت"
+          isTrend
           onClick={() => {
             const start: NhiStartPayload = {
               kind: "nhi_start",
@@ -265,25 +278,10 @@ export function GameHubInline({
           }}
         />
 
-        <HubButton
-          title="🔠 فك الشفرة (كلمة ملخبطة)"
-          subtitle="مين أسرع واحد هيرتب حروف الكلمة؟"
-          meta="سرعة"
-          onClick={() => {
-            const start: ScrambleStartPayload = {
-              kind: "scramble_start",
-              gameId: newId(),
-              createdBy: CURRENT_USER.username,
-              createdAt: new Date().toISOString(),
-            };
-            send(start);
-          }}
-        />
-
-        <HubButton
-          title="💖 مقياس الحب (Love Calculator)"
-          subtitle="نسبة الحب بين اسمين! جربها مع صحابك للضحك."
-          meta="تريند"
+        <GameCard
+          icon="💖"
+          title="مقياس الحب"
+          isTrend
           onClick={() => {
             const start: LoveCalcStartPayload = {
               kind: "lovecalc_start",
@@ -295,10 +293,9 @@ export function GameHubInline({
           }}
         />
 
-        <HubButton
-          title="🧩 احكيها بالإيموجيز"
-          subtitle="تلميح بإيموجيز… والتاني يخمّن في رسالة."
-          meta="ضحك"
+        <GameCard
+          icon="🧩"
+          title="إيموجيز"
           onClick={() => {
             const start: EmojiPictStartPayload = {
               kind: "emoji_pict_start",
@@ -310,10 +307,9 @@ export function GameHubInline({
           }}
         />
 
-        <HubButton
-          title="⚡ النقر السريع"
-          subtitle="مين يضغط أكتر؟ تحدي سريع يكسّر الملل."
-          meta="سريع"
+        <GameCard
+          icon="⚡"
+          title="النقر السريع"
           onClick={() => {
             const start: FastTapStartPayload = {
               kind: "fasttap_start",
@@ -325,10 +321,9 @@ export function GameHubInline({
           }}
         />
 
-        <HubButton
-          title="🎡 عجلة الحظ"
-          subtitle="لف… وتطلع مهمة/تحدي يغيّر المود."
-          meta="ميكس"
+        <GameCard
+          icon="🎡"
+          title="عجلة الحظ"
           onClick={() => {
             const start: WheelStartPayload = {
               kind: "wheel_start",
@@ -341,10 +336,23 @@ export function GameHubInline({
           }}
         />
 
-        <HubButton
-          title="🔗 سلسلة كلمات"
-          subtitle="اكتب كلمة تبدأ بآخر حرف من اللي قبلها."
-          meta="ذكاء"
+        <GameCard
+          icon="🔠"
+          title="فك الشفرة"
+          onClick={() => {
+            const start: ScrambleStartPayload = {
+              kind: "scramble_start",
+              gameId: newId(),
+              createdBy: CURRENT_USER.username,
+              createdAt: new Date().toISOString(),
+            };
+            send(start);
+          }}
+        />
+
+        <GameCard
+          icon="🔗"
+          title="كلمات"
           onClick={() => {
             const start: WordChainStartPayload = {
               kind: "wordchain_start",
@@ -358,9 +366,9 @@ export function GameHubInline({
         />
 
         {!isGroup && (
-          <HubButton
-            title="🎲 حجر / ورقة / مقص"
-            subtitle="سريعة وبتولّع الجو في ثواني."
+          <GameCard
+            icon="🎲"
+            title="مقص"
             onClick={() => {
               const start: RpsStartPayload = {
                 kind: "rps",
@@ -375,9 +383,9 @@ export function GameHubInline({
         )}
 
         {!isGroup && (
-          <HubButton
-            title="❌⭕ إكس أو (Tic Tac Toe)"
-            subtitle="تحدي الذكاء السريع، العبوا سوا جوه الشات."
+          <GameCard
+            icon="❌"
+            title="إكس أو"
             onClick={() => {
               const start: XoStartPayload = {
                 kind: "xo_start",
@@ -390,25 +398,9 @@ export function GameHubInline({
         )}
 
         {!isGroup && (
-          <HubButton
-            title="✍️ نقط ومربعات (Dots & Boxes)"
-            subtitle="قفل المربع بخط وخد نقطة والعب تاني، ذكريات المدرسة!"
-            onClick={() => {
-              const start: DbStartPayload = {
-                kind: "db_start",
-                gameId: newId(),
-                createdBy: CURRENT_USER.username,
-                gridSize: 4, // 4x4 boxes = 5x5 dots
-              };
-              send(start);
-            }}
-          />
-        )}
-
-        {!isGroup && (
-          <HubButton
-            title="🔵🔴 أربعة في صف (Connect 4)"
-            subtitle="أسقط الأقراص واعمل خط من 4 قبل صاحبك!"
+          <GameCard
+            icon="🔴"
+            title="4 في صف"
             onClick={() => {
               const start: C4StartPayload = {
                 kind: "c4_start",
@@ -420,10 +412,26 @@ export function GameHubInline({
           />
         )}
 
+        {!isGroup && (
+          <GameCard
+            icon="✍️"
+            title="مربعات"
+            onClick={() => {
+              const start: DbStartPayload = {
+                kind: "db_start",
+                gameId: newId(),
+                createdBy: CURRENT_USER.username,
+                gridSize: 4,
+              };
+              send(start);
+            }}
+          />
+        )}
+
         {(!isGroup || participants.length <= 5) && (
-          <HubButton
-            title="🐍🪜 السلم والثعبان"
-            subtitle="نرد + حركة + سلالم وثعابين… والسبق لحد 100."
+          <GameCard
+            icon="🐍"
+            title="ثعبان"
             onClick={() => {
               const start: SlStartPayload = {
                 kind: "sl_start",
@@ -437,10 +445,9 @@ export function GameHubInline({
         )}
 
         {(!isGroup || participants.length <= 3) && (
-          <HubButton
-            title="🏦🚗 بنك الحظ (فلوس + بنك + أملاك)"
-            subtitle="نسخة خفيفة ممتعة: لفّ، اشترى، ادفع إيجار، وابنِ ثروة."
-            meta="طويلة"
+          <GameCard
+            icon="🏦"
+            title="بنك الحظ"
             onClick={() => {
               const tokens: BankStartPayload["token"][] = ["🚗", "🏎️", "🚕", "🛻"];
               const start: BankStartPayload = {

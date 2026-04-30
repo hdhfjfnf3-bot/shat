@@ -140,7 +140,7 @@ export const MessageBubble = memo(function MessageBubble({
   const gamePayload = msg.type === "game" ? safeJsonParse<{ kind?: string; gameId?: string }>(msg.content) : null;
 
   const isNew = Date.now() - new Date(msg.createdAt).getTime() < 2000;
-  const animClass = isNew ? "animate-messageIn" : "";
+  const animClass = ""; // Disabled to fix Virtuoso scrolling glitches
   const originStyle = { transformOrigin: isOwn ? "bottom right" : "bottom left" };
 
   const isOnlyEmoji = useMemo(() => {
@@ -219,7 +219,7 @@ export const MessageBubble = memo(function MessageBubble({
 
         {/* Other user avatar */}
         {!isOwn && isLastInGroup && (
-          <div className="w-[30px] mr-2 flex-shrink-0 flex items-end pb-[2px]">
+          <div className="w-[30px] ml-2 flex-shrink-0 flex items-end pb-[2px]">
             <img src={otherUser?.avatarUrl} className="w-[30px] h-[30px] rounded-full object-cover" alt="" />
           </div>
         )}
@@ -229,7 +229,7 @@ export const MessageBubble = memo(function MessageBubble({
 
           {/* Reply preview */}
           {replyTo && (
-            <div className={`mb-1.5 max-w-full flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
+            <div className={`mb-[4px] max-w-full flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
               <div
                 className="px-3 py-1.5 text-[12px] rounded-[12px] max-w-full"
                 style={{
@@ -275,8 +275,8 @@ export const MessageBubble = memo(function MessageBubble({
                         ? "p-0 overflow-hidden"
                         : `px-[15px] py-[10px] text-[15px] font-[450] ${
                             isOwn
-                              ? `${themeClass} text-white`
-                              : "text-[#dde6f0]"
+                              ? `${themeClass} text-white shadow-[0_0_15px_rgba(167,139,250,0.3)]`
+                              : "text-[#dde6f0] glass-panel shadow-[0_0_15px_rgba(0,240,255,0.15)] border-l-[2px] border-[#00f0ff]/30"
                           }`
               } leading-[1.5] break-words whitespace-pre-wrap`}
               style={{
@@ -285,7 +285,7 @@ export const MessageBubble = memo(function MessageBubble({
                   : (msg.type === "image" || msg.type === "video" || msg.type === "game") ? "22px"
                   : borderRadius,
                 ...(!isOwn && msg.type !== "like" && msg.type !== "image" && msg.type !== "video" && msg.type !== "game" && msg.type !== "poll" && !isOnlyEmoji
-                  ? { background: '#1c2640' }
+                  ? { background: 'rgba(28, 38, 64, 0.4)', backdropFilter: 'blur(10px)' }
                   : {}),
               }}
               dir="auto"
@@ -387,7 +387,7 @@ export const MessageBubble = memo(function MessageBubble({
 
           {/* Reaction chips */}
           {reactionEntries.length > 0 && (
-            <div className={`flex ${isOwn ? "justify-end" : "justify-start"} -mt-2.5 z-[50] ${isOwn ? "pr-3" : "pl-3"} relative`}>
+            <div className={`flex ${isOwn ? "justify-end" : "justify-start"} relative z-[50] ${isOwn ? "pr-3" : "pl-3"}`} style={{ marginTop: '-10px' }}>
               <div className="rounded-full px-2.5 py-[4px] flex items-center gap-1 text-[13px] cursor-pointer" style={{ background: '#1f2d45', border: '1px solid rgba(255,255,255,0.06)' }}>
                 {reactionEntries.map(([emoji, count]) => (
                   <button key={emoji} onClick={() => onReact(emoji)} className="flex items-center gap-0.5">

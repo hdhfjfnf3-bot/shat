@@ -108,13 +108,15 @@ export function Thread({ activeId }: { activeId: string }) {
 
       let br = "22px";
       if (isOwn) {
-        if (!isFirst && !isLast) br = "22px 4px 4px 22px";
-        else if (!isFirst && isLast)  br = "22px 4px 22px 22px";
-        else if (isFirst && !isLast)  br = "22px 22px 4px 22px";
-      } else {
+        // isOwn is on the LEFT in RTL
         if (!isFirst && !isLast) br = "4px 22px 22px 4px";
         else if (!isFirst && isLast)  br = "4px 22px 22px 22px";
         else if (isFirst && !isLast)  br = "22px 22px 22px 4px";
+      } else {
+        // !isOwn is on the RIGHT in RTL
+        if (!isFirst && !isLast) br = "22px 4px 4px 22px";
+        else if (!isFirst && isLast)  br = "22px 4px 22px 22px";
+        else if (isFirst && !isLast)  br = "22px 22px 4px 22px";
       }
 
       list.push({ type: "msg", idx, msg, isOwn, isFirst, isLast, br, id: msg.id });

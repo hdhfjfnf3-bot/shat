@@ -463,9 +463,9 @@ export function GameHubInline({
         )}
 
         {!isGroup && (
-          <HubButton
-            title="🎲 ضومنة (Dominoes)"
-            subtitle="سحب وتوصيل أحجار الضومنة، مين يخلص اللي معاه الأول؟"
+          <GameCard
+            icon="🀄"
+            title="ضومنة"
             onClick={() => {
               const start: DominoStartPayload = {
                 kind: "domino_start",
@@ -478,10 +478,9 @@ export function GameHubInline({
         )}
 
         {!isGroup && (
-          <HubButton
-            title="🃏 كوتشينة: حرب"
-            subtitle="كل واحد يسحب ورقة… الأعلى يكسب نقطة."
-            meta="سريعة"
+          <GameCard
+            icon="⚔️"
+            title="حرب أوراق"
             onClick={() => {
               const start: CardsStartPayload = {
                 kind: "cards_start",
@@ -496,10 +495,9 @@ export function GameHubInline({
         )}
 
         {!isGroup && (
-          <HubButton
-            title="🃏 كوتشينة: أعلى ورقة"
-            subtitle="جولة واحدة سريعة: ورقة وخلصنا."
-            meta="سريعة"
+          <GameCard
+            icon="🃏"
+            title="أعلى ورقة"
             onClick={() => {
               const start: CardsStartPayload = {
                 kind: "cards_start",

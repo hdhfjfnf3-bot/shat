@@ -10,17 +10,7 @@ export default function Inbox() {
   return (
     <div className="fixed inset-0 flex text-white overflow-hidden font-sans bg-transparent">
       <div className="space-stars" />
-      {/* ── Soft ambient gradient (zero GPU cost) ── */}
-      <div 
-        className="absolute inset-0 pointer-events-none opacity-30 z-0"
-        style={{
-          background: `
-            radial-gradient(ellipse at 0% 0%, rgba(79, 124, 247, 0.2) 0%, transparent 50%),
-            radial-gradient(ellipse at 100% 100%, rgba(155, 106, 240, 0.18) 0%, transparent 50%),
-            radial-gradient(ellipse at 100% 0%, rgba(55, 175, 200, 0.08) 0%, transparent 40%)
-          `
-        }}
-      />
+      {/* Reduced background complexity for stable 120fps */}
 
       <Sidebar activeId={activeId} />
       <MainArea activeId={activeId} />

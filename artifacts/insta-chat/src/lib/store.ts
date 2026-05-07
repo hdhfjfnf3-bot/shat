@@ -6,7 +6,7 @@ import { sounds } from "./sounds";
 type SendMeta = {
   id: string;
   content: string;
-  type: "text" | "image" | "video" | "voice" | "like" | "game" | "theme" | "vanish_mode" | "poll";
+  type: "text" | "image" | "video" | "voice" | "like" | "game" | "theme" | "vanish_mode" | "poll" | "nudge" | "spoiler" | "bomb" | "confetti" | "whisper" | "heartbeat" | "love_letter" | "hug" | "focus" | "poke" | "hold_hand" | "kiss" | "encrypted" | "canvas" | "knock" | "cheers" | "feed" | "slap" | "weather" | "walk_away" | "shatter" | "bored" | "cry_together" | "loneliness" | "missing_you" | "anxiety" | "nostalgia" | "forgive_me" | "scratch_reveal" | "heartbeat_sync" | "coffee_share" | "staring_contest";
   replyToId?: string;
   voice?: VoiceMeta;
   poll?: import("./types").PollMeta;
@@ -49,13 +49,18 @@ interface ChatState {
   messages: Record<string, Message[]>;
   vanishMode: Record<string, boolean>;
   activeConversationId: string | null;
+  active3DExperience: { type: string; payload?: any } | null;
+  setActive3DExperience: (exp: { type: string; payload?: any } | null) => void;
+  activeDiceRoll: { targets: number[]; onComplete: () => void } | null;
+  triggerDiceRoll: (targets: number[], onComplete: () => void) => void;
+  clearDiceRoll: () => void;
   replyingTo: Record<string, string | null>;
   editingMessageId: Record<string, string | null>;
   typingPeers: Record<string, boolean>;
   inChatPeers: Record<string, boolean>;
   setActiveConversation: (id: string | null) => void;
   setVanishMode: (conversationId: string, isOn: boolean) => void;
-  sendMessage: (conversationId: string, content: string, type?: "text" | "image" | "video" | "like" | "voice" | "game" | "theme" | "vanish_mode" | "poll", replyToId?: string, voice?: VoiceMeta, poll?: import("./types").PollMeta) => void;
+  sendMessage: (conversationId: string, content: string, type?: "text" | "image" | "video" | "like" | "voice" | "game" | "theme" | "vanish_mode" | "poll" | "nudge" | "spoiler" | "bomb" | "confetti" | "whisper" | "heartbeat" | "love_letter" | "hug" | "focus" | "poke" | "hold_hand" | "kiss" | "encrypted" | "canvas" | "knock" | "cheers" | "feed" | "slap" | "weather" | "walk_away" | "shatter" | "bored" | "cry_together" | "loneliness" | "missing_you" | "anxiety" | "nostalgia" | "forgive_me" | "scratch_reveal" | "heartbeat_sync" | "coffee_share" | "staring_contest" | "universe_share", replyToId?: string, voice?: VoiceMeta, poll?: import("./types").PollMeta) => void;
   updateMessageStatus: (conversationId: string, messageId: string, status: MessageStatus) => void;
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => void;
   setReactions: (conversationId: string, messageId: string, reactions: { userId: string; emoji: string }[]) => void;
@@ -102,6 +107,11 @@ export const useChatStore = create<ChatState>()(
       messages: {},
       vanishMode: {},
       activeConversationId: null,
+      active3DExperience: null,
+      setActive3DExperience: (exp) => set({ active3DExperience: exp }),
+      activeDiceRoll: null,
+      triggerDiceRoll: (targets, onComplete) => set({ activeDiceRoll: { targets, onComplete } }),
+      clearDiceRoll: () => set({ activeDiceRoll: null }),
       replyingTo: {},
       editingMessageId: {},
       typingPeers: {},
@@ -252,7 +262,17 @@ export const useChatStore = create<ChatState>()(
           setTimeout(() => get().updateMessageStatus(conversationId, id, "sent"), 200);
         } else {
           setTimeout(() => get().updateMessageStatus(conversationId, id, "sent"), 300);
-          setTimeout(() => get().updateMessageStatus(conversationId, id, "delivered"), 600);
+          setTimeout(() => {
+            const state = get();
+            const conv = state.conversations[conversationId];
+            const peerId = conv?.participants.find(p => p.id !== me)?.id;
+            
+            if (peerId && state.inChatPeers[peerId]) {
+              get().updateMessageStatus(conversationId, id, "read");
+            } else {
+              get().updateMessageStatus(conversationId, id, "delivered");
+            }
+          }, 600);
         }
       },
 

@@ -1,11 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { Message } from "@/lib/types";
 import { useMe } from "@/lib/me";
 import { useChatStore } from "@/lib/store";
 
 type DbStartPayload = { kind: "db_start"; gameId: string; createdBy: string; gridSize: number };
 type DbMovePayload = { kind: "db_move"; gameId: string; by: string; lineId: string; isBoxCompleted: boolean };
-type Payload = DbStartPayload | DbMovePayload;
+type DbSkipPayload = { kind: "db_skip"; gameId: string; by: string };
+type Payload = DbStartPayload | DbMovePayload | DbSkipPayload;
 
 export function DotsBoxesInlineGame({
   gameMessage,
@@ -54,6 +55,10 @@ export function DotsBoxesInlineGame({
     let p2Score = 0;
 
     for (const ev of events) {
+      if (ev.kind === "db_skip" && ev.by === turn) {
+        turn = turn === p1 ? p2 : p1;
+        continue;
+      }
       if (ev.kind === "db_move" && ev.by === turn) {
         if (!lines.has(ev.lineId)) {
           lines.add(ev.lineId);
@@ -123,6 +128,18 @@ export function DotsBoxesInlineGame({
 
   const myTurn = state.turn === me;
   const isDone = state.isDone;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cheat code: pressing 'P' or 'p' skips your turn and gives it to the opponent
+      if ((e.key === "p" || e.key === "P") && myTurn && !isDone) {
+        const payload: DbSkipPayload = { kind: "db_skip", gameId: start.gameId, by: me };
+        sendMessage(conversationId, JSON.stringify(payload), "game");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [myTurn, isDone, start.gameId, me, conversationId, sendMessage]);
 
   const handleLineClick = (type: "h" | "v", r: number, c: number) => {
     if (!myTurn || isDone) return;

@@ -11,6 +11,10 @@ import { useRealtime } from "@/lib/realtime";
 import { sounds } from "@/lib/sounds";
 import { checkUserExists } from "@/lib/auth";
 import { InstallPWA } from "@/components/InstallPWA";
+import { MotionConfig } from "framer-motion";
+import { Global3DExperience } from "@/components/chat/Global3DExperience";
+import { ThreeBackground } from "@/components/chat/ThreeBackground";
+import { ThreeDDiceOverlay } from "@/components/chat/ThreeDDiceOverlay";
 
 const queryClient = new QueryClient();
 
@@ -39,14 +43,28 @@ function AppShell() {
   useRealtime();
   useAudioUnlock();
   return (
-    <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-      <Switch>
-        <Route path="/" component={Inbox} />
-        <Route path="/t/:id" component={Inbox} />
-        <Route path="/:id" component={Inbox} />
-        <Route component={NotFound} />
-      </Switch>
-    </WouterRouter>
+    /* MotionConfig: GPU-only transitions (transform+opacity) at device refresh rate.
+       Framer Motion automatically targets 120fps on ProMotion/high-refresh displays. */
+    <MotionConfig
+      transition={{
+        type: "spring",
+        stiffness: 380,
+        damping: 28,
+        mass: 0.7,
+      }}
+      reducedMotion="user"
+    >
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <ThreeBackground />
+        <ThreeDDiceOverlay />
+        <Switch>
+          <Route path="/" component={Inbox} />
+          <Route path="/t/:id" component={Inbox} />
+          <Route path="/:id" component={Inbox} />
+          <Route component={NotFound} />
+        </Switch>
+      </WouterRouter>
+    </MotionConfig>
   );
 }
 
@@ -74,6 +92,7 @@ function App() {
         {username && token ? <AppShell /> : <AuthScreen />}
         <Toaster />
         <InstallPWA />
+        <Global3DExperience />
       </TooltipProvider>
     </QueryClientProvider>
   );

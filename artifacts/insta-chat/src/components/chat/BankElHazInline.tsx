@@ -3,6 +3,13 @@ import { Message } from "@/lib/types";
 import { useMe } from "@/lib/me";
 import { useChatStore } from "@/lib/store";
 import { Coins, Siren, Train, Zap, Droplets, MapPin, Building2, Gavel, Landmark, Home, WalletCards } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 type BankStartPayload = { kind: "bank_start"; gameId: string; createdBy: string; createdAt: string; token: "🚗" | "🏎️" | "🚕" | "🛻" };
 type BankJoinPayload = { kind: "bank_join"; gameId: string; by: string; token: "🚗" | "🏎️" | "🚕" | "🛻"; at: string };
@@ -14,14 +21,8 @@ type BankSellPayload = { kind: "bank_sell"; gameId: string; by: string; square: 
 type BankUseJailCardPayload = { kind: "bank_use_jail_card"; gameId: string; by: string; at: string };
 
 type BankPayload =
-  | BankStartPayload
-  | BankJoinPayload
-  | BankRollPayload
-  | BankBuyPayload
-  | BankPayPayload
-  | BankUpgradePayload
-  | BankSellPayload
-  | BankUseJailCardPayload;
+  | BankStartPayload | BankJoinPayload | BankRollPayload | BankBuyPayload
+  | BankPayPayload | BankUpgradePayload | BankSellPayload | BankUseJailCardPayload;
 
 type Square =
   | { kind: "go"; name: "البداية"; salary: number }
@@ -34,13 +35,8 @@ type Square =
   | { kind: "utility"; name: string; price: number; type: "water" | "electric" | "station" };
 
 type BankCard = {
-  title: string;
-  text: string;
-  effect:
-    | { kind: "money"; amount: number }
-    | { kind: "move"; to: number }
-    | { kind: "jail" }
-    | { kind: "jail_card" };
+  title: string; text: string;
+  effect: { kind: "money"; amount: number } | { kind: "move"; to: number } | { kind: "jail" } | { kind: "jail_card" };
 };
 
 const TOKENS: Array<BankStartPayload["token"]> = ["🚗", "🏎️", "🚕", "🛻"];
@@ -126,11 +122,21 @@ const DiceFace = ({ value, rolling }: { value: number; rolling: boolean }) => {
   }[value] || [[50, 50]];
 
   return (
-    <div className={`w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-white to-gray-200 rounded-lg shadow-[inset_0_-2px_4px_rgba(0,0,0,0.3),0_4px_8px_rgba(0,0,0,0.4)] relative ${rolling ? "animate-spin" : ""}`} style={{ transformStyle: "preserve-3d" }}>
+    <motion.div 
+      initial={false}
+      animate={{ 
+        rotateX: rolling ? [0, 360, 720, 1080] : 0, 
+        rotateY: rolling ? [0, 360, 720, 1080] : 0,
+        z: rolling ? [0, 100, 0] : 0
+      }}
+      transition={{ duration: 0.6, type: "spring", stiffness: 100, damping: 10 }}
+      className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl shadow-[inset_0_-4px_4px_rgba(0,0,0,0.2),0_10px_20px_rgba(0,0,0,0.5)] relative border border-gray-200"
+      style={{ transformStyle: "preserve-3d" }}
+    >
       {dots.map(([x, y], i) => (
-        <div key={i} className="absolute w-2 h-2 bg-gradient-to-br from-gray-800 to-black rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)]" style={{ top: `${y}%`, left: `${x}%`, transform: 'translate(-50%, -50%)' }} />
+        <div key={i} className="absolute w-2.5 h-2.5 bg-black rounded-full shadow-[inset_0_2px_4px_rgba(255,255,255,0.4)]" style={{ top: `${y}%`, left: `${x}%`, transform: 'translate(-50%, -50%)' }} />
       ))}
-    </div>
+    </motion.div>
   );
 };
 
@@ -253,7 +259,6 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
 
       const activePlayers = allPlayers.filter(p => !bankrupt[p] && tokenBy[p]);
       if (activePlayers.length === 0) continue;
-      // ensure currentTurnPlayer is active
       if (bankrupt[currentTurnPlayer] || !tokenBy[currentTurnPlayer]) {
         currentTurnPlayer = getNextPlayer(currentTurnPlayer);
       }
@@ -448,12 +453,10 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
 
   const myTurn = state.turn === me && !state.bankrupt[me];
   const mePos = state.pos[me] ?? 0;
-  const otherPos = state.pos[otherUserId] ?? 0;
-  const meCash = state.cash[me] ?? 0;
-  const otherCash = state.cash[otherUserId] ?? 0;
 
   const sq = BOARD[mePos]!;
   const amOwner = state.owner[mePos] === me;
+  const meCash = state.cash[me] ?? 0;
   const canBuy = (sq.kind === "property" || sq.kind === "utility") && !state.owner[mePos] && meCash >= sq.price;
   const canUpgrade = sq.kind === "property" && amOwner && meCash >= Math.floor(sq.price / 2) && (state.houses[mePos] ?? 0) < 4;
   const canSell = amOwner;
@@ -472,30 +475,25 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
   const roll = () => {
     if (!myTurn || isRolling) return;
     setIsRolling(true);
-    let spins = 0;
-    const interval = setInterval(() => {
-      setDisplayDice([Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1]);
-      spins++;
-      if (spins > 10) clearInterval(interval);
-    }, 50);
 
-    setTimeout(() => {
-      clearInterval(interval);
-      let d1 = Math.floor(Math.random() * 6) + 1;
-      let d2 = Math.floor(Math.random() * 6) + 1;
+    let d1 = Math.floor(Math.random() * 6) + 1;
+    let d2 = Math.floor(Math.random() * 6) + 1;
 
-      if (cheatMode && typeof cheatValue === "number" && cheatValue >= 2 && cheatValue <= 12) {
-        d1 = Math.min(6, cheatValue - 1);
-        d2 = cheatValue - d1;
-        if (d1 === 0 || d2 === 0) { d1 = Math.min(6, cheatValue); d2 = Math.max(1, cheatValue - 6); }
-        setCheatMode(false);
-        setCheatValue("");
-      }
+    if (cheatMode && typeof cheatValue === "number" && cheatValue >= 2 && cheatValue <= 12) {
+      d1 = Math.min(6, cheatValue - 1);
+      d2 = cheatValue - d1;
+      if (d1 === 0 || d2 === 0) { d1 = Math.min(6, cheatValue); d2 = Math.max(1, cheatValue - 6); }
+      setCheatMode(false);
+      setCheatValue("");
+    }
 
+    useChatStore.getState().triggerDiceRoll([d1, d2], () => {
+      setDisplayDice([d1, d2]);
       sendMessage(conversationId, JSON.stringify({ kind: "bank_roll", gameId, by: me, d1, d2, at: new Date().toISOString() }), "game");
       setIsRolling(false);
-    }, 600);
+    });
   };
+
 
   function getCellPos(index: number) {
     let col = 0, row = 0;
@@ -508,283 +506,286 @@ export function BankElHazInline({ gameMessage, otherUserId, conversationId, allM
 
   function getColorClass(c: string) {
     switch(c) {
-      case "أحمر": return "bg-[#ff4d4d]";
-      case "أزرق": return "bg-[#3b82f6]";
-      case "أصفر": return "bg-[#fbbf24]";
-      case "أخضر": return "bg-[#22c55e]";
-      case "بنفسجي": return "bg-[#a855f7]";
-      case "أسود": return "bg-[#1f2937]";
+      case "أحمر": return "bg-[#ff3b30]";
+      case "أزرق": return "bg-[#007aff]";
+      case "أصفر": return "bg-[#ffcc00]";
+      case "أخضر": return "bg-[#34c759]";
+      case "بنفسجي": return "bg-[#af52de]";
+      case "أسود": return "bg-[#1c1c1e]";
       default: return "bg-transparent";
     }
   }
 
   function renderSquare(sq: Square, i: number) {
     const isOwnedByMe = state.owner[i] === me;
-    const isOwnedByOther = state.owner[i] === otherUserId;
-    const ownerColor = isOwnedByMe ? "border-b-4 border-b-[#0095f6]" : isOwnedByOther ? "border-b-4 border-b-[#ed4956]" : "";
+    const isOwnedByOther = state.owner[i] && state.owner[i] !== me;
+    const ownerColor = isOwnedByMe ? "border-b-4 border-b-[#007aff]" : isOwnedByOther ? "border-b-4 border-b-[#ff3b30]" : "";
 
     return (
       <div 
         key={i} 
-        className={`absolute bg-[#f9f8f3] border border-[#d4c8b8] shadow-sm flex flex-col items-center justify-between overflow-hidden ${ownerColor}`}
+        className={cn("absolute bg-[#f9f8f3] border border-[#d4c8b8]/50 shadow-sm flex flex-col items-center justify-between overflow-hidden", ownerColor)}
         style={getCellPos(i)}
       >
         {sq.kind === "property" && (
-          <div className={`w-full h-[26%] border-b border-[#d4c8b8] shadow-sm ${getColorClass(sq.color)}`} />
+          <div className={cn("w-full h-[28%] border-b border-[#d4c8b8] shadow-sm", getColorClass(sq.color))} />
         )}
         
-        {/* Top Icon for specials */}
-        {sq.kind === "chance" && <WalletCards className="w-4 h-4 text-[#eab308] mt-1 drop-shadow-sm" />}
-        {sq.kind === "tax" && <Coins className="w-4 h-4 text-[#ef4444] mt-1 drop-shadow-sm" />}
-        {sq.kind === "utility" && sq.type === "water" && <Droplets className="w-4 h-4 text-[#3b82f6] mt-1 drop-shadow-sm" />}
-        {sq.kind === "utility" && sq.type === "electric" && <Zap className="w-4 h-4 text-[#eab308] mt-1 drop-shadow-sm" />}
-        {sq.kind === "utility" && sq.type === "station" && <Train className="w-4 h-4 text-[#6b7280] mt-1 drop-shadow-sm" />}
-        {sq.kind === "jail" && <Siren className="w-4 h-4 text-[#ef4444] mt-1 drop-shadow-sm" />}
-        {sq.kind === "gotojail" && <Gavel className="w-4 h-4 text-[#ef4444] mt-1 drop-shadow-sm" />}
-        {sq.kind === "parking" && <MapPin className="w-4 h-4 text-[#3b82f6] mt-1 drop-shadow-sm" />}
-        {sq.kind === "go" && <Landmark className="w-4 h-4 text-[#22c55e] mt-1 drop-shadow-sm" />}
+        {sq.kind === "chance" && <WalletCards className="w-5 h-5 text-[#ffcc00] mt-1.5 drop-shadow-sm" />}
+        {sq.kind === "tax" && <Coins className="w-5 h-5 text-[#ff3b30] mt-1.5 drop-shadow-sm" />}
+        {sq.kind === "utility" && sq.type === "water" && <Droplets className="w-5 h-5 text-[#007aff] mt-1.5 drop-shadow-sm" />}
+        {sq.kind === "utility" && sq.type === "electric" && <Zap className="w-5 h-5 text-[#ffcc00] mt-1.5 drop-shadow-sm" />}
+        {sq.kind === "utility" && sq.type === "station" && <Train className="w-5 h-5 text-[#8e8e93] mt-1.5 drop-shadow-sm" />}
+        {sq.kind === "jail" && <Siren className="w-5 h-5 text-[#ff3b30] mt-1.5 drop-shadow-sm" />}
+        {sq.kind === "gotojail" && <Gavel className="w-5 h-5 text-[#ff3b30] mt-1.5 drop-shadow-sm" />}
+        {sq.kind === "parking" && <MapPin className="w-5 h-5 text-[#007aff] mt-1.5 drop-shadow-sm" />}
+        {sq.kind === "go" && <Landmark className="w-5 h-5 text-[#34c759] mt-1.5 drop-shadow-sm" />}
 
-        {/* Houses */}
         {state.houses[i] > 0 && (
           <div className="absolute top-0.5 w-full flex justify-center gap-[1px]">
             {Array.from({ length: state.houses[i] }).map((_, idx) => (
-              <span key={idx} className="text-[7px] drop-shadow-md">{idx === 3 ? "🏨" : "🏠"}</span>
+              <span key={idx} className="text-[9px] drop-shadow-md">{idx === 3 ? "🏨" : "🏠"}</span>
             ))}
           </div>
         )}
 
-        <div className={`text-[6px] sm:text-[7px] font-bold text-gray-800 text-center leading-[1.1] w-full px-0.5 line-clamp-2 ${sq.kind !== "property" ? "mt-auto" : ""}`}>
+        <div className={cn("text-[7px] sm:text-[9px] font-black text-gray-800 text-center leading-[1.1] w-full px-0.5 line-clamp-2", sq.kind !== "property" && "mt-auto")}>
           {sq.name}
         </div>
 
-        {/* Bottom Price */}
-        {(sq.kind === "property" || sq.kind === "utility") && (
-          <div className="text-[6px] font-bold text-gray-600 w-full text-center pb-[2px]">${sq.price}</div>
-        )}
-        {(sq.kind === "tax") && (
-          <div className="text-[6px] font-bold text-[#ef4444] w-full text-center pb-[2px]">-${sq.amount}</div>
-        )}
-        {(sq.kind === "go") && (
-          <div className="text-[6px] font-bold text-[#22c55e] w-full text-center pb-[2px] mb-1">مرتب $200</div>
-        )}
+        {(sq.kind === "property" || sq.kind === "utility") && <div className="text-[7px] sm:text-[8px] font-bold text-gray-500 w-full text-center pb-[2px]">${sq.price}</div>}
+        {(sq.kind === "tax") && <div className="text-[7px] sm:text-[8px] font-bold text-[#ff3b30] w-full text-center pb-[2px]">-${sq.amount}</div>}
+        {(sq.kind === "go") && <div className="text-[7px] sm:text-[8px] font-bold text-[#34c759] w-full text-center pb-[2px] mb-1">مرتب $200</div>}
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0f0f0f] overflow-hidden w-full shadow-2xl font-sans">
-      <div className="p-2 sm:p-3 aspect-square relative bg-[radial-gradient(circle_at_center,_#354333_0%,_#1a1f1a_100%)]">
+    <motion.div 
+      initial={{ opacity: 0, y: 50, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      className="rounded-[32px] border border-white/[0.1] bg-black/80 backdrop-blur-3xl overflow-hidden w-full shadow-[0_30px_80px_rgba(0,0,0,0.8),inset_0_1px_0_0_rgba(255,255,255,0.1)] font-sans flex flex-col"
+    >
+      {/* The 3D Board Area */}
+      <div className="p-4 sm:p-8 aspect-[4/3] sm:aspect-square relative flex items-center justify-center perspective-[1200px] overflow-visible">
         
-        {/* Realistic Board Background */}
-        <div className="absolute inset-2 sm:inset-3 bg-[linear-gradient(135deg,#dde9db_0%,#cfdcc7_45%,#dce6d6_100%)] rounded-sm shadow-inner ring-1 ring-black/20" dir="ltr">
-          {BOARD.map((sq, i) => renderSquare(sq, i))}
+        {/* Board Surface rotated in 3D */}
+        <motion.div 
+          className="w-full h-full relative"
+          style={{ transformStyle: "preserve-3d" }}
+          initial={{ rotateX: 35, rotateZ: -10, y: 20, scale: 0.9 }}
+          animate={{ rotateX: 35, rotateZ: -10, y: 20, scale: 0.9 }}
+        >
+          {/* Wooden/Marble Base underneath the board */}
+          <div className="absolute inset-[-10px] bg-gradient-to-br from-[#2a1a08] to-[#120a02] rounded-xl shadow-[0_40px_100px_rgba(0,0,0,0.9)] transform translate-z-[-10px]" />
+          
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,#e9e3d9_0%,#d5cbb8_100%)] rounded-lg shadow-inner ring-1 ring-black/30 overflow-hidden border-4 border-[#3c2a1e]" dir="ltr">
+            {BOARD.map((sq, i) => renderSquare(sq, i))}
 
-          {state.allPlayers.map((p, idx) => {
-            const isJoined = Object.keys(state.tokens).includes(p) || p === state.allPlayers[0];
-            if (!isJoined && state.joinedCount <= 1) return null;
-            // Spread tokens slightly if on same spot
-            const pPos = state.pos[p] ?? 0;
-            const sameSpotCount = state.allPlayers.filter(op => state.pos[op] === pPos).length;
-            let offset = { x: 0, y: 0 };
-            if (sameSpotCount > 1) {
-              const ring = idx % sameSpotCount;
-              offset.x = (ring === 1 || ring === 2 ? 6 : ring === 3 ? -6 : 0);
-              offset.y = (ring === 2 || ring === 3 ? 6 : ring === 1 ? -6 : 0);
-            }
-            return (
-              <div 
-                key={p}
-                className={`absolute z-50 flex items-center justify-center w-[14.28%] h-[14.28%] pointer-events-none transition-all duration-[600ms] ease-out drop-shadow-2xl ${p === me ? "z-[60]" : ""}`}
-                style={{ ...getCellPos(pPos), transform: `translate(${offset.x}px, ${offset.y}px)` }}
-              >
-                <div className={`text-[18px] sm:text-[20px] filter drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] ${p === state.turn ? "animate-pulse scale-110" : ""}`}>
-                  {state.tokens[p]}
-                </div>
-              </div>
-            );
-          })}
+            <AnimatePresence>
+              {state.allPlayers.map((p, idx) => {
+                const isJoined = Object.keys(state.tokens).includes(p) || p === state.allPlayers[0];
+                if (!isJoined && state.joinedCount <= 1) return null;
+                const pPos = state.pos[p] ?? 0;
+                const sameSpotCount = state.allPlayers.filter(op => state.pos[op] === pPos).length;
+                let offset = { x: 0, y: 0 };
+                if (sameSpotCount > 1) {
+                  const ring = idx % sameSpotCount;
+                  offset.x = (ring === 1 || ring === 2 ? 10 : ring === 3 ? -10 : 0);
+                  offset.y = (ring === 2 || ring === 3 ? 10 : ring === 1 ? -10 : 0);
+                }
+                return (
+                  <motion.div 
+                    key={p}
+                    layout
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1, ...getCellPos(pPos), x: offset.x, y: offset.y }}
+                    transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                    className={cn("absolute z-50 flex items-center justify-center w-[14.28%] h-[14.28%] pointer-events-none", p === me && "z-[60]")}
+                  >
+                    <motion.div 
+                      animate={p === state.turn ? { y: [-5, 5, -5], scale: 1.2 } : {}}
+                      transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                      className="text-[24px] sm:text-[32px] drop-shadow-[0_10px_10px_rgba(0,0,0,0.6)]"
+                      style={{ transform: "rotateX(-35deg) rotateZ(10deg)" }} // Counter-rotate the token so it stands up
+                    >
+                      {state.tokens[p]}
+                    </motion.div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
 
-          {/* Center Area (Realistic style) */}
-          <div className="absolute top-[14.28%] left-[14.28%] w-[71.42%] h-[71.42%] flex flex-col items-center justify-center p-3 sm:p-4 text-center pointer-events-none" dir="rtl">
-            
-            {/* Center Logo/Branding */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center opacity-10 rotate-[-45deg] select-none pointer-events-none">
-              <Building2 className="w-32 h-32 text-green-900" />
-              <div className="text-4xl font-black text-green-900 uppercase mt-2">بنك الحظ</div>
-            </div>
-
-            <div className="z-10 w-full h-full flex flex-col items-center justify-between pointer-events-auto relative">
+            {/* Center Area */}
+            <div className="absolute top-[14.28%] left-[14.28%] w-[71.42%] h-[71.42%] flex flex-col items-center justify-center p-4 sm:p-6 text-center pointer-events-none bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.4)_0%,transparent_70%)]" dir="rtl">
               
-              <div className="bg-gradient-to-br from-[#00d26a] to-[#00a854] px-4 sm:px-5 py-1.5 sm:py-2 rounded-full shadow-lg border border-white/20 mb-1">
-                <h3 className="text-[12px] sm:text-[15px] font-black text-white tracking-widest uppercase drop-shadow-md">بنك الحظ المصرى</h3>
+              <div className="absolute inset-0 flex flex-col items-center justify-center opacity-15 rotate-[-45deg] select-none pointer-events-none">
+                <Building2 className="w-40 h-40 text-black" />
+                <div className="text-5xl font-black text-black uppercase mt-2 tracking-widest">بنك الحظ</div>
               </div>
 
-              {/* Dice Container */}
-              <div className="flex gap-3 my-auto scale-90 sm:scale-100">
-                <DiceFace value={displayDice[0]} rolling={isRolling} />
-                <DiceFace value={displayDice[1]} rolling={isRolling} />
-              </div>
+              <div className="z-10 w-full h-full flex flex-col items-center justify-between pointer-events-auto relative">
+                <div className="bg-gradient-to-br from-[#00c6ff] to-[#0072ff] px-6 py-2 rounded-full shadow-2xl border border-white/40 mb-2">
+                  <h3 className="text-[14px] sm:text-[18px] font-black text-white tracking-widest uppercase drop-shadow-md">بنك الحظ المصرى</h3>
+                </div>
 
-              {/* Event Log Plaque */}
-              <div className="w-full bg-white/90 backdrop-blur-sm rounded-lg border border-black/10 shadow-md p-1.5 sm:p-2 min-h-[42px] flex items-center justify-center mt-2 mb-2">
-                {state.last ? (
-                  <div className="flex items-center gap-1.5 text-[11px] sm:text-[12px] font-bold text-gray-800">
-                    <span className="text-[14px]">{state.last.icon}</span>
-                    <span className="leading-tight">{state.last.text}</span>
-                  </div>
-                ) : (
-                  <div className="text-[10px] text-gray-500 font-medium">في انتظار الرمية الأولى...</div>
-                )}
-              </div>
+                <div className="flex gap-4 sm:gap-6 my-auto" style={{ transform: "rotateX(-35deg) rotateZ(10deg)" }}>
+                  <DiceFace value={displayDice[0]} rolling={isRolling} />
+                  <DiceFace value={displayDice[1]} rolling={isRolling} />
+                </div>
 
+                <AnimatePresence mode="wait">
+                  <motion.div 
+                    key={state.last?.text || "empty"}
+                    initial={{ opacity: 0, y: 10, rotateX: -20 }}
+                    animate={{ opacity: 1, y: 0, rotateX: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="w-[90%] bg-white/95 backdrop-blur-xl rounded-xl border border-black/10 shadow-[0_10px_20px_rgba(0,0,0,0.2)] p-2 sm:p-3 min-h-[50px] flex items-center justify-center mt-2 mb-2"
+                  >
+                    {state.last ? (
+                      <div className="flex items-center gap-2 text-[12px] sm:text-[14px] font-bold text-gray-900">
+                        <span className="text-[18px]">{state.last.icon}</span>
+                        <span className="leading-tight">{state.last.text}</span>
+                      </div>
+                    ) : (
+                      <div className="text-[12px] text-gray-500 font-medium">في انتظار الرمية الأولى...</div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+
+              </div>
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
 
-      {/* Modern Controls Panel below the board */}
-      <div className="bg-[#1a1a1a] p-3 border-t border-white/10" dir="rtl">
-        {/* Scoreboard */}
+      {/* Modern Premium Controls Panel */}
+      <div className="bg-black/40 backdrop-blur-3xl p-4 sm:p-6 border-t border-white/10 z-10" dir="rtl">
         {state.allPlayers.filter(p => !state.bankrupt[p]).length <= 1 && state.joinedCount > 1 ? (
-          <div className="text-[#00d26a] font-black text-center text-[15px] py-2 bg-[#00d26a]/10 rounded-lg animate-pulse border border-[#00d26a]/30">
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="text-[#34c759] font-black text-center text-[18px] py-4 bg-[#34c759]/10 rounded-2xl border border-[#34c759]/30 shadow-[0_0_30px_rgba(52,199,89,0.2)]">
             🏆 فاز {state.tokens[state.allPlayers.find(p => !state.bankrupt[p])!]}!
-          </div>
+          </motion.div>
         ) : (
-          <div className="flex overflow-x-auto gap-2 mb-3 pb-1 hide-scrollbar">
+          <div className="flex overflow-x-auto gap-3 mb-4 pb-2 hide-scrollbar snap-x">
             {state.allPlayers.map((p) => {
               if (state.joinedCount <= 1 && p !== state.allPlayers[0] && p !== me) return null;
               const isTurn = state.turn === p;
               const isMe = p === me;
               return (
-                <div key={p} className={`flex-1 min-w-[80px] flex flex-col items-center rounded-xl p-1.5 border-2 transition-all ${isTurn ? (isMe ? "border-[#0095f6] bg-[#0095f6]/10 shadow-[0_0_12px_rgba(0,149,246,0.25)] scale-105" : "border-[#ed4956] bg-[#ed4956]/10 shadow-[0_0_12px_rgba(237,73,86,0.25)] scale-105") : "border-white/5 bg-black/40"}`}>
-                  <div className="text-[11px] text-[#a8a8a8] font-medium flex items-center gap-1">{isMe ? "أنت" : p} {state.tokens[p]}</div>
-                  <div className={`text-[14px] font-black tracking-wide ${state.bankrupt[p] ? "text-red-500 line-through" : "text-[#00d26a]"}`}>
+                <motion.div 
+                  key={p} 
+                  layout
+                  className={cn(
+                    "flex-1 min-w-[100px] flex flex-col items-center rounded-[20px] p-3 border border-white/10 transition-all snap-center",
+                    isTurn ? (isMe ? "bg-[#007aff]/20 border-[#007aff]/50 shadow-[0_0_20px_rgba(0,122,255,0.3)]" : "bg-[#ff3b30]/20 border-[#ff3b30]/50 shadow-[0_0_20px_rgba(255,59,48,0.3)]") : "bg-white/5"
+                  )}
+                >
+                  <div className="text-[12px] text-white/60 font-medium flex items-center gap-1.5 mb-1">{isMe ? "أنت" : p} <span className="text-[16px] drop-shadow-md">{state.tokens[p]}</span></div>
+                  <div className={cn("text-[18px] font-black tracking-wide", state.bankrupt[p] ? "text-red-500 line-through" : "text-white")}>
                     ${state.cash[p] ?? 0}
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <div className="rounded-xl border border-white/10 bg-black/30 p-2">
-            <div className="text-[10px] text-[#777] mb-1">صك الملكية الحالي</div>
-            <div className="text-[13px] text-white font-bold">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+          <div className="rounded-[20px] border border-white/10 bg-white/5 p-4 backdrop-blur-md">
+            <div className="text-[11px] text-white/50 mb-1 font-semibold uppercase tracking-wider">الخانة الحالية</div>
+            <div className="text-[16px] text-white font-black drop-shadow-md">
               {sq.kind === "property" || sq.kind === "utility" ? sq.name : "مفيش صك هنا"}
             </div>
-            <div className="text-[11px] text-[#a8a8a8] mt-1">
+            <div className="text-[13px] text-white/70 mt-1 font-medium">
               {sq.kind === "property"
-                ? `سعر ${sq.price}$ • إيجار ${sq.rent}$${fullSetOwned ? " • طقم كامل x2" : ""} • بيوت ${state.houses[mePos] ?? 0}`
-                : sq.kind === "utility"
-                  ? `سعر ${sq.price}$ • مرفق خاص`
-                  : sq.kind === "tax"
-                    ? `ضريبة ${sq.amount}$`
-                    : sq.kind === "chance"
-                      ? "اسحب كارت"
-                      : sq.kind === "go"
-                        ? `مرتب ${sq.salary}$`
-                        : sq.name}
+                ? `سعر ${sq.price}$ • إيجار ${sq.rent}$${fullSetOwned ? " • طقم x2" : ""} • بيوت ${state.houses[mePos] ?? 0}`
+                : sq.kind === "utility" ? `سعر ${sq.price}$ • مرفق خاص`
+                : sq.kind === "tax" ? `ضريبة ${sq.amount}$`
+                : sq.kind === "chance" ? "اسحب كارت"
+                : sq.kind === "go" ? `مرتب ${sq.salary}$`
+                : sq.name}
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-gradient-to-br from-[#f7edd3] to-[#e7d2a7] p-2 text-[#2a210f] shadow-inner">
-            <div className="text-[10px] font-bold tracking-wide uppercase opacity-70 mb-1">
+          <div className="rounded-[20px] border border-white/20 bg-gradient-to-br from-[#f7edd3] to-[#d5cbb8] p-4 text-[#1a1208] shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+            <div className="text-[11px] font-black tracking-widest uppercase opacity-60 mb-1">
               {state.lastCard?.deck === "chance" ? "Chance Card" : state.lastCard?.deck === "chest" ? "Community Chest" : "Card"}
             </div>
-            <div className="text-[13px] font-black">{state.lastCard?.card.title ?? "آخر كارت"}</div>
-            <div className="text-[11px] mt-1 leading-snug min-h-[34px]">
+            <div className="text-[16px] font-black">{state.lastCard?.card.title ?? "آخر كارت"}</div>
+            <div className="text-[13px] mt-1 leading-snug font-bold opacity-80 min-h-[40px]">
               {state.lastCard?.card.text ?? "لسه مفيش كارت متسحب."}
             </div>
-        {/* Buttons */}
+          </div>
+        </div>
+
         {state.allPlayers.filter(p => !state.bankrupt[p]).length > 1 && (
           <div className="relative">
             {cheatMode && (
               <input 
                 type="number" min={2} max={12} value={cheatValue} 
                 onChange={(e) => setCheatValue(parseInt(e.target.value) || "")}
-                className="w-12 h-6 bg-black/50 text-white text-center rounded absolute -top-8 left-2 z-50 text-[12px] outline-none"
+                className="w-12 h-8 bg-black/80 text-white text-center rounded absolute -top-10 left-2 z-50 text-[14px] outline-none ring-1 ring-white/30"
                 placeholder="2-12"
               />
             )}
             {state.joinedCount < state.allPlayers.length && !Object.keys(state.tokens).includes(me) ? (
-              <button onClick={join} className="w-full rounded-xl bg-gradient-to-r from-[#0095f6] to-[#0077c9] py-3 text-[14px] font-black text-white active:scale-[0.98] transition-all shadow-lg hover:shadow-[#0095f6]/40">
+              <motion.button whileTap={{ scale: 0.95 }} onClick={join} className="w-full rounded-[20px] bg-[#007aff] py-4 text-[16px] font-black text-white shadow-[0_8px_20px_rgba(0,122,255,0.4)] border border-white/20">
                 انضم للعبة 🚗
-              </button>
+              </motion.button>
             ) : (
-              <div className="flex flex-col gap-2 w-full">
-                <div className="flex items-stretch gap-2 w-full h-[42px]">
-                  <button
+              <div className="flex flex-col gap-3 w-full">
+                <div className="flex items-stretch gap-3 w-full h-[54px]">
+                  <motion.button
+                    whileTap={myTurn && !isRolling ? { scale: 0.95 } : {}}
                     onClick={roll}
                     disabled={!myTurn || isRolling}
-                    className={`flex-[2] flex items-center justify-center gap-1.5 rounded-xl text-[13px] font-black transition-all overflow-hidden ${myTurn ? "bg-gradient-to-r from-[#00d26a] to-[#00a854] text-white active:scale-[0.98] shadow-lg shadow-[#00d26a]/30 hover:brightness-110" : "bg-white/5 text-[#555] cursor-not-allowed"}`}
+                    className={cn(
+                      "flex-[2] flex items-center justify-center gap-2 rounded-[20px] text-[16px] font-black transition-all border",
+                      myTurn 
+                        ? "bg-[#34c759] text-white border-white/20 shadow-[0_8px_20px_rgba(52,199,89,0.4)]" 
+                        : "bg-white/5 text-white/30 border-white/5 cursor-not-allowed"
+                    )}
                   >
-                    🎲 رمي النرد
-                  </button>
+                    <span className="text-[20px]">🎲</span> رمي النرد
+                  </motion.button>
                   {canBuy && (
-                    <button
-                      onClick={buy}
-                      className="flex-1 rounded-xl text-[13px] font-black transition-all bg-gradient-to-r from-[#0095f6] to-[#0077c9] text-white active:scale-[0.98] shadow-lg shadow-[#0095f6]/30 hover:brightness-110"
-                    >
+                    <motion.button whileTap={{ scale: 0.95 }} onClick={buy} className="flex-1 rounded-[20px] text-[15px] font-black transition-all bg-[#007aff] text-white border border-white/20 shadow-[0_8px_20px_rgba(0,122,255,0.4)]">
                       🏠 شراء
-                    </button>
+                    </motion.button>
                   )}
                 </div>
                 
                 {(canUpgrade || canSell) && (
-                  <div className="flex items-stretch gap-2 w-full h-[36px]">
+                  <div className="flex items-stretch gap-3 w-full h-[46px]">
                     {canUpgrade && (
-                      <button
-                        onClick={upgrade}
-                        className="flex-1 rounded-lg text-[12px] font-bold transition-all bg-gradient-to-r from-[#eab308] to-[#ca8a04] text-white shadow-md active:scale-[0.98] hover:brightness-110"
-                      >
+                      <motion.button whileTap={{ scale: 0.95 }} onClick={upgrade} className="flex-1 rounded-[16px] text-[14px] font-bold bg-[#ffcc00] text-black shadow-[0_4px_15px_rgba(255,204,0,0.3)]">
                         🏗️ بناء ({Math.floor(sq.price / 2)}$)
-                      </button>
+                      </motion.button>
                     )}
                     {canSell && (
-                      <button
-                        onClick={sell}
-                        className="flex-1 rounded-lg text-[12px] font-bold transition-all bg-[#262626] text-[#fafafa] active:scale-[0.98] hover:bg-[#333] border border-white/10"
-                      >
+                      <motion.button whileTap={{ scale: 0.95 }} onClick={sell} className="flex-1 rounded-[16px] text-[14px] font-bold bg-white/10 text-white border border-white/20 hover:bg-white/20">
                         🏦 بيع
-                      </button>
+                      </motion.button>
                     )}
                   </div>
                 )}
 
                 {state.inJail[me] && (
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <div className="rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-[11px] text-[#a8a8a8]">
-                      محاولات الخروج: {state.jailAttempts[me] ?? 0}/3
+                  <div className="mt-2 grid grid-cols-2 gap-3">
+                    <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2.5 text-[13px] text-white/60 font-semibold flex items-center justify-center">
+                      محاولات: {state.jailAttempts[me] ?? 0}/3
                     </div>
-                    <button
-                      onClick={useJailCard}
-                      disabled={!canUseJailCard}
-                      className={`rounded-lg text-[12px] font-bold transition-all ${
-                        canUseJailCard
-                          ? "bg-gradient-to-r from-[#eab308] to-[#ca8a04] text-white shadow-md active:scale-[0.98] hover:brightness-110"
-                          : "bg-white/5 text-[#666] cursor-not-allowed border border-white/10"
-                      }`}
-                    >
-                      🎫 خروج ({state.jailCards[me] ?? 0})
-                    </button>
+                    <motion.button whileTap={canUseJailCard ? { scale: 0.95 } : {}} onClick={useJailCard} disabled={!canUseJailCard} className={cn("rounded-[16px] text-[13px] font-bold transition-all border", canUseJailCard ? "bg-[#ffcc00] text-black shadow-lg border-white/20" : "bg-white/5 text-white/30 border-white/5 cursor-not-allowed")}>
+                      🎫 كارت خروج ({state.jailCards[me] ?? 0})
+                    </motion.button>
                   </div>
                 )}
-
-                <div className="mt-2 rounded-xl border border-white/10 bg-black/30 px-2 py-2">
-                  <div className="flex items-center justify-between gap-2 text-[11px] text-[#a8a8a8]">
-                    <span className="flex items-center gap-1"><Home className="w-3.5 h-3.5" />البيوت عندك</span>
-                    <span className="font-bold text-white">
-                      {Object.entries(state.owner).filter(([, v]) => v === me).length} أملاك /{" "}
-                      {Object.values(state.houses).reduce((a, b) => a + b, 0)} مباني
-                    </span>
-                  </div>
-                </div>
               </div>
             )}
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

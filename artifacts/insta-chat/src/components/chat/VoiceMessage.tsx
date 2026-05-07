@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Play, Pause } from "lucide-react";
 import { formatDuration } from "@/lib/voice";
+import { motion } from "framer-motion";
 
 export function VoiceMessage({
   src,
@@ -61,64 +62,78 @@ export function VoiceMessage({
 
   const safePeaks = peaks && peaks.length > 0 ? peaks : new Array(40).fill(0.4);
 
-  /* Instagram colors:
-     Own (gradient bg):  play button = white/30, waveform passed = white, unplayed = white/40
-     Other (dark bg):    play button = #3797f0, waveform passed = #3797f0, unplayed = #555  */
   const playBtnClass = isOwn
-    ? "bg-white/25 hover:bg-white/35 text-white"
-    : "bg-[#3797f0] hover:bg-[#1877f2] text-white";
-  const wavePassedColor = isOwn ? "rgba(255,255,255,0.95)" : "#3797f0";
-  const waveBgColor     = isOwn ? "rgba(255,255,255,0.30)" : "#404040";
-  const rateBtnClass    = isOwn ? "bg-white/20 text-white" : "bg-white/10 text-[#fafafa]";
-  const timeCls         = isOwn ? "text-white/80" : "text-[#a8a8a8]";
+    ? "bg-white/30 hover:bg-white/40 text-white shadow-[0_4px_10px_rgba(255,255,255,0.2)]"
+    : "bg-gradient-to-br from-[#3797f0] to-[#0072ff] hover:from-[#1877f2] hover:to-[#005bb5] text-white shadow-[0_4px_15px_rgba(55,151,240,0.4)]";
+  const wavePassedColor = isOwn ? "rgba(255,255,255,1)" : "#3797f0";
+  const waveBgColor     = isOwn ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.15)";
+  const rateBtnClass    = isOwn ? "bg-white/20 hover:bg-white/30 text-white" : "bg-white/10 hover:bg-white/20 text-[#fafafa] border border-white/5";
+  const timeCls         = isOwn ? "text-white/90" : "text-[#a8a8a8]";
 
   return (
-    <div className="flex items-center gap-2.5" style={{ minWidth: 200 }}>
+    <div className="flex items-center gap-3 relative z-10" style={{ minWidth: 220 }}>
       <audio ref={audioRef} src={src} preload="metadata" />
 
       {/* Play / Pause */}
-      <button
+      <motion.button
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
         onClick={toggle}
-        className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors ${playBtnClass}`}
+        className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors backdrop-blur-md border border-white/10 ${playBtnClass}`}
       >
         {playing
-          ? <Pause className="w-4 h-4" />
-          : <Play  className="w-4 h-4 ml-0.5" />
+          ? <Pause className="w-4 h-4 fill-current" />
+          : <Play  className="w-4 h-4 ml-0.5 fill-current" />
         }
-      </button>
+      </motion.button>
 
       {/* Waveform */}
-      <div className="flex items-end gap-[2px] h-7 flex-1 overflow-hidden" dir="ltr">
+      <div className="flex items-center gap-[3px] h-8 flex-1 overflow-visible relative" dir="ltr">
         {safePeaks.map((p, i) => {
-          const passed = i / safePeaks.length < progress;
-          const h = Math.max(3, Math.round(p * 26));
+          const passed = i / safePeaks.length <= progress;
+          const h = Math.max(4, Math.round(p * 28));
+          
           return (
-            <div
+            <motion.div
               key={i}
+              animate={playing && passed ? { 
+                height: [h, Math.max(h * 1.5, 8), h], 
+                backgroundColor: wavePassedColor,
+                opacity: 1
+              } : { 
+                height: h, 
+                backgroundColor: passed ? wavePassedColor : waveBgColor,
+                opacity: passed ? 1 : 0.6
+              }}
+              transition={{
+                height: { repeat: Infinity, duration: 0.6, ease: "easeInOut", delay: (i % 5) * 0.1 },
+                backgroundColor: { duration: 0.2 }
+              }}
+              className="w-[3px] rounded-full shadow-sm"
               style={{
-                width: 2,
-                height: h,
-                borderRadius: 1,
-                background: passed ? wavePassedColor : waveBgColor,
-                transition: "background 60ms linear",
                 flexShrink: 0,
+                boxShadow: passed && !isOwn ? "0 0 5px rgba(55,151,240,0.5)" : passed && isOwn ? "0 0 5px rgba(255,255,255,0.5)" : "none"
               }}
             />
           );
         })}
       </div>
 
-      {/* Speed toggle */}
-      <button
-        onClick={cycleRate}
-        className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${rateBtnClass}`}
-      >
-        {rate}x
-      </button>
+      <div className="flex flex-col items-end justify-center gap-1 shrink-0 ml-1">
+        {/* Speed toggle */}
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={cycleRate}
+          className={`text-[10px] font-black px-2 py-0.5 rounded-full backdrop-blur-sm ${rateBtnClass}`}
+        >
+          {rate}x
+        </motion.button>
 
-      {/* Duration */}
-      <div className={`text-[12px] tabular-nums shrink-0 font-medium ${timeCls}`}>
-        {formatDuration(playing || progress > 0 ? cur : duration)}
+        {/* Duration */}
+        <div className={`text-[11px] tabular-nums font-bold ${timeCls}`}>
+          {formatDuration(playing || progress > 0 ? cur : duration)}
+        </div>
       </div>
     </div>
   );

@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
-
+import { useMemo, useState, useEffect } from "react";
 import { Message } from "@/lib/types";
 import { useMe } from "@/lib/me";
 import { useChatStore } from "@/lib/store";
+import { motion, AnimatePresence } from "framer-motion";
+import { RefreshCw, Sparkles, User, Crosshair } from "lucide-react";
 
 type StartPayload = {
   kind: "wheel_start";
@@ -49,11 +50,7 @@ const PRESETS: Record<StartPayload["preset"], string[]> = {
 };
 
 function safeJsonParse<T>(s: string): T | null {
-  try {
-    return JSON.parse(s) as T;
-  } catch {
-    return null;
-  }
+  try { return JSON.parse(s) as T; } catch { return null; }
 }
 
 function hashSeed(s: string): number {
@@ -65,13 +62,14 @@ function hashSeed(s: string): number {
   return h >>> 0;
 }
 
-export function SpinWheelInline({
-  gameMessage,
-  otherUserId,
-  conversationId,
-  allMessages,
-  participants,
-}: {
+// Map presets to premium neon colors
+const THEME_COLORS = {
+  ضحك: ["#FF2A54", "#FF9D00"],
+  رومانسية: ["#FF0844", "#FFB199"],
+  ميكس: ["#B829FF", "#00D2FF"],
+};
+
+export function SpinWheelInline({ gameMessage, otherUserId, conversationId, allMessages, participants }: {
   gameMessage: Message;
   otherUserId: string;
   conversationId: string;
@@ -81,7 +79,7 @@ export function SpinWheelInline({
   const me = useMe((s) => s.username).toLowerCase();
   const { sendMessage } = useChatStore();
   const [spinning, setSpinning] = useState(false);
-  const [spinAngle, setSpinAngle] = useState(0);
+  const [targetAngle, setTargetAngle] = useState(0);
 
   const start = useMemo(() => safeJsonParse<StartPayload>(gameMessage.content), [gameMessage.content]);
   const gameId = start?.kind === "wheel_start" ? start.gameId : null;
@@ -107,6 +105,10 @@ export function SpinWheelInline({
   }
 
   const items = PRESETS[start.preset];
+  const sliceDeg = 360 / items.length;
+  const theme = THEME_COLORS[start.preset];
+
+  // Logic to determine picked item based on spins
   const seed = hashSeed(`${gameId}:${spins}`);
   const pickedIndex = seed % items.length;
   const picked = items[pickedIndex]!;
@@ -127,87 +129,146 @@ export function SpinWheelInline({
   const currentTurnPlayer = allPlayers[spins % allPlayers.length];
   const myTurn = currentTurnPlayer === me;
 
+  // Initialize correct angle based on current spin count
+  useEffect(() => {
+    const baseRotation = spins * 360 * 5; // 5 full spins per turn minimum
+    const sliceOffset = 360 - (pickedIndex * sliceDeg);
+    const finalAngle = baseRotation + sliceOffset - (sliceDeg / 2);
+    setTargetAngle(finalAngle);
+  }, [spins, pickedIndex, sliceDeg]);
+
   const spin = () => {
     if (!myTurn || spinning) return;
     setSpinning(true);
-    const extra = 720 + (seed % 360);
-    setSpinAngle((a) => a + extra);
+    
+    // Send message to trigger spin for everyone
+    const payload: SpinPayload = { kind: "wheel_spin", gameId, by: me, at: new Date().toISOString() };
+    sendMessage(conversationId, JSON.stringify(payload), "game");
+    
     setTimeout(() => {
-      const payload: SpinPayload = { kind: "wheel_spin", gameId, by: me, at: new Date().toISOString() };
-      sendMessage(conversationId, JSON.stringify(payload), "game");
       setSpinning(false);
-    }, 900);
+    }, 4500); // Wait for spin animation to finish
   };
 
-  const slices = items.length;
-  const sliceDeg = 360 / slices;
-
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#111] overflow-hidden">
-      <div className="p-3 bg-gradient-to-r from-rose-500/20 to-indigo-500/20">
-        <div className="text-[13px] font-black text-white">🎡 عجلة الحظ</div>
-        <div className="text-[11px] text-white/70 mt-0.5">
-          بريسِت: {start.preset} • {myTurn ? "دورك" : `دور ${currentTurnPlayer}`}
+    <motion.div 
+      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      className="rounded-[24px] border border-white/10 bg-black/60 backdrop-blur-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.1)] relative isolate hardware-accelerated"
+    >
+      {/* Dynamic ambient background glow */}
+      <motion.div 
+        animate={{ opacity: spinning ? 0.6 : 0.2, scale: spinning ? 1.2 : 1 }} 
+        transition={{ duration: 1 }}
+        className="absolute inset-0 -z-10 blur-[60px]"
+        style={{ background: `radial-gradient(circle at 50% 50%, ${theme[0]}, transparent 70%)` }}
+      />
+
+      <div className="px-5 py-4 flex items-center justify-between border-b border-white/[0.05] bg-gradient-to-r from-white/[0.05] to-transparent">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.5)]">
+            <Sparkles className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <div className="text-[14px] font-black text-white drop-shadow-md tracking-wide">عجلة الحظ <span className="text-[#a8a8a8] text-[12px] font-medium ml-1">({start.preset})</span></div>
+          </div>
+        </div>
+        <div className="px-3 py-1.5 rounded-full bg-white/10 border border-white/10 flex items-center gap-1.5 backdrop-blur-md">
+          <User className="w-3.5 h-3.5 text-[#00d2ff]" />
+          <span className="text-[12px] font-bold text-white drop-shadow-sm">{myTurn ? "دورك" : `دور ${currentTurnPlayer}`}</span>
         </div>
       </div>
 
-      <div className="p-3 space-y-3">
-        <div className="flex items-center justify-center">
-          <div className="relative">
-            <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20 w-0 h-0 border-l-[8px] border-r-[8px] border-b-[12px] border-l-transparent border-r-transparent border-b-white/80 drop-shadow" />
-            <div
-              className="w-full max-w-[300px] aspect-square rounded-full border border-white/10 bg-black/20 shadow-[inset_0_0_20px_rgba(0,0,0,0.6)] relative overflow-hidden mx-auto"
-              style={{
-                transform: `rotate(${spinAngle}deg)`,
-                transition: spinning ? "transform 0.9s cubic-bezier(.2,.8,.2,1)" : undefined,
-              }}
-            >
-              {items.map((_, i) => (
+      <div className="p-6 flex flex-col items-center gap-6">
+        
+        {/* 3D Wheel Container */}
+        <div className="relative w-[240px] h-[240px] flex items-center justify-center preserve-3d perspective-[1000px]">
+          
+          {/* Wheel Pointer (Fixed) */}
+          <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 drop-shadow-[0_5px_10px_rgba(0,0,0,0.5)]">
+            <motion.div animate={spinning ? { rotate: [-5, 5, -5] } : {}} transition={{ repeat: Infinity, duration: 0.1 }}>
+              <div className="w-0 h-0 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-white relative z-10" />
+              <div className="w-0 h-0 border-l-[14px] border-r-[14px] border-t-[24px] border-l-transparent border-r-transparent border-t-white/30 absolute -top-[2px] -left-[2px] -z-10 blur-[2px]" />
+            </motion.div>
+          </div>
+
+          {/* The Spinning Wheel */}
+          <motion.div
+            animate={{ rotate: targetAngle }}
+            transition={{ type: "spring", damping: 12, stiffness: 20, mass: 1, restDelta: 0.001 }}
+            className="w-full h-full rounded-full border-[6px] border-[#1a1a1a] shadow-[0_0_30px_rgba(0,0,0,0.8),inset_0_0_20px_rgba(0,0,0,0.6)] relative overflow-hidden bg-[#222]"
+            style={{ filter: spinning ? "drop-shadow(0 0 20px rgba(255,255,255,0.2))" : "none" }}
+          >
+            {items.map((item, i) => {
+              const rotation = i * sliceDeg;
+              return (
                 <div
                   key={i}
-                  className="absolute inset-0"
-                  style={{
-                    transform: `rotate(${i * sliceDeg}deg)`,
-                  }}
+                  className="absolute inset-0 origin-center flex items-start justify-center"
+                  style={{ transform: `rotate(${rotation}deg)` }}
                 >
-                  <div
-                    className="absolute left-1/2 top-1/2 origin-left"
-                    style={{
-                      width: "50%",
-                      height: 2,
-                      background: "rgba(255,255,255,0.08)",
-                      transform: "translateY(-1px)",
-                    }}
-                  />
+                  {/* Slice Divider */}
+                  <div className="absolute top-0 bottom-1/2 w-0.5 bg-black/40 shadow-[0_0_5px_rgba(0,0,0,0.5)]" style={{ transform: `rotate(${sliceDeg/2}deg)`, transformOrigin: "bottom center" }} />
+                  
+                  {/* Text Content */}
+                  <div 
+                    className="pt-6 font-bold text-[10px] text-white/90 drop-shadow-md text-center px-4"
+                    style={{ transform: `rotate(${sliceDeg/2}deg)`, width: "120px" }}
+                  >
+                    {item.length > 20 ? item.slice(0, 20) + "..." : item}
+                  </div>
                 </div>
-              ))}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-10 h-10 rounded-full bg-white/10 border border-white/10 shadow" />
-              </div>
+              );
+            })}
+
+            {/* Center Cap */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-gradient-to-br from-[#333] to-[#111] border-[3px] border-[#222] shadow-[0_5px_15px_rgba(0,0,0,0.8),inset_0_2px_5px_rgba(255,255,255,0.2)] z-20 flex items-center justify-center">
+              <div className="w-4 h-4 rounded-full bg-gradient-to-br from-white/20 to-transparent" />
             </div>
+          </motion.div>
+        </div>
+
+        {/* Result Area */}
+        <div className="w-full relative group">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent rounded-2xl" />
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-center relative overflow-hidden backdrop-blur-md">
+            <div className="text-[12px] text-[#00d2ff] font-bold mb-1.5 tracking-wider uppercase drop-shadow-[0_0_5px_rgba(0,210,255,0.5)]">النتيجة</div>
+            <AnimatePresence mode="wait">
+              <motion.div 
+                key={picked}
+                initial={{ opacity: 0, y: 10, filter: "blur(5px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="text-[16px] font-black text-white leading-relaxed drop-shadow-lg"
+              >
+                {spinning ? "يتم السحب..." : picked}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
-          <div className="text-[11px] text-white/60 mb-1">النتيجة</div>
-          <div className="text-[14px] font-semibold text-white leading-relaxed">{picked}</div>
-        </div>
-
-        <button
-          type="button"
+        <motion.button
+          whileHover={myTurn && !spinning ? { scale: 1.05, boxShadow: "0 10px 30px rgba(0, 122, 255, 0.4)" } : {}}
+          whileTap={myTurn && !spinning ? { scale: 0.95 } : {}}
           onClick={spin}
           disabled={!myTurn || spinning}
           className={[
-            "w-full rounded-xl border border-white/10 py-2 text-[13px] font-black transition-colors",
+            "w-full rounded-2xl border border-transparent py-4 text-[15px] font-black transition-all flex items-center justify-center gap-2",
             myTurn && !spinning
-              ? "bg-white/5 hover:bg-white/10 active:bg-white/15 text-white"
-              : "bg-white/5 text-white/30 cursor-not-allowed",
+              ? "bg-gradient-to-r from-[#007aff] to-[#00d2ff] text-white shadow-[0_10px_20px_rgba(0,122,255,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] hover:brightness-110"
+              : "bg-white/5 text-white/30 cursor-not-allowed border-white/10",
           ].join(" ")}
         >
-          {spinning ? "بتلف..." : "لف العجلة"}
-        </button>
+          {spinning ? (
+            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
+              <RefreshCw className="w-5 h-5" />
+            </motion.div>
+          ) : (
+            <Crosshair className="w-5 h-5 drop-shadow-md" />
+          )}
+          <span>{spinning ? "جاري اللف..." : "لف العجلة الآن"}</span>
+        </motion.button>
       </div>
-    </div>
+    </motion.div>
   );
 }
-
